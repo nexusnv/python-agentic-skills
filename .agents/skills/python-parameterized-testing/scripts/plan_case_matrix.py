@@ -14,6 +14,9 @@ from typing import Any
 # Bound candidate pools before de-duplication or Cartesian expansion.
 MAX_VALUES_PER_DIMENSION = 10_000
 MAX_DIMENSIONS = 128
+# Hard ceilings for requested output and seeded-sample allocation.
+MAX_CASES = 10_000
+MAX_SAMPLE_SIZE = 10_000
 
 
 class InputError(ValueError):
@@ -21,7 +24,15 @@ class InputError(ValueError):
 
 
 def _validate_json_value(value: Any) -> None:
-    if value is None or isinstance(value, (str, bool, int)):
+    if isinstance(value, str):
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError as error:
+            raise InputError(
+                "values must not contain unpaired Unicode surrogate code points"
+            ) from error
+        return
+    if value is None or isinstance(value, (bool, int)):
         return
     if isinstance(value, float):
         if not math.isfinite(value):
@@ -75,6 +86,10 @@ def _validate_dimensions(payload: Any) -> dict[str, list[Any]]:
         raise InputError("dimensions must be a non-empty object")
     if len(dimensions) > MAX_DIMENSIONS:
         raise InputError(f"dimensions must contain at most {MAX_DIMENSIONS} entries")
+    for name in dimensions:
+        if not isinstance(name, str):
+            raise InputError("dimension names must be strings")
+        _validate_json_value(name)
 
     validated: dict[str, list[Any]] = {}
     for name in sorted(dimensions):
@@ -106,6 +121,8 @@ def _validate_max_cases(payload: dict[str, Any]) -> int:
     max_cases = payload["max_cases"]
     if isinstance(max_cases, bool) or not isinstance(max_cases, int) or max_cases <= 0:
         raise InputError("max_cases must be a positive integer")
+    if max_cases > MAX_CASES:
+        raise InputError(f"max_cases must not exceed {MAX_CASES}")
     return max_cases
 
 
@@ -123,6 +140,8 @@ def _validate_sampling(payload: dict[str, Any]) -> tuple[int | None, int | None]
     sample_size = payload["sample_size"]
     if isinstance(sample_size, bool) or not isinstance(sample_size, int) or sample_size <= 0:
         raise InputError("sample_size must be a positive integer")
+    if sample_size > MAX_SAMPLE_SIZE:
+        raise InputError(f"sample_size must not exceed {MAX_SAMPLE_SIZE}")
     return seed, sample_size
 
 
@@ -171,8 +190,8 @@ def plan_case_matrix(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise InputError("top-level JSON value must be an object")
     seed, sample_size = _validate_sampling(payload)
-    dimensions = _validate_dimensions(payload)
     max_cases = _validate_max_cases(payload)
+    dimensions = _validate_dimensions(payload)
     if seed is not None and sample_size is not None:
         cases, truncated = _plan_seeded(dimensions, max_cases, seed, sample_size)
         strategy = "seeded-sample"

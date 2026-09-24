@@ -80,6 +80,38 @@ def test_seeded_sample_is_deterministic_and_capped():
     assert all(case["text"] in {"", "a", "b"} for case in result["cases"])
 
 
+def test_seeded_sample_repeats_seed_and_changes_with_different_seed():
+    payload = {
+        "dimensions": {"n": {"values": list(range(100))}},
+        "max_cases": 10,
+        "seed": 17,
+        "sample_size": 10,
+    }
+
+    first = run_helper(payload)
+    repeat = run_helper(payload)
+    different = run_helper({**payload, "seed": 29})
+
+    assert first.stdout == repeat.stdout
+    assert json.loads(first.stdout)["cases"] != json.loads(different.stdout)["cases"]
+
+
+def test_seeded_sample_is_untruncated_when_within_budget():
+    result = json.loads(
+        run_helper(
+            {
+                "dimensions": {"n": {"values": [1, 2, 3, 4]}},
+                "max_cases": 4,
+                "seed": 17,
+                "sample_size": 4,
+            }
+        ).stdout
+    )
+
+    assert len(result["cases"]) == 4
+    assert result["truncated"] is False
+
+
 @pytest.mark.parametrize("missing", ["seed", "sample_size"])
 def test_seeded_sample_requires_both_fields(missing):
     payload = {
@@ -116,6 +148,55 @@ def test_plan_case_matrix_rejects_malformed_max_cases_with_exact_error():
     assert result.stdout == ""
     assert result.stderr.startswith("error: max_cases must be a positive integer")
     assert len(result.stderr) < 200
+
+
+@pytest.mark.parametrize("field", ["max_cases", "sample_size"])
+def test_plan_case_matrix_rejects_hard_budget_ceilings(field):
+    payload = {
+        "dimensions": {"n": {"values": [1, 2, 3]}},
+        "max_cases": 1,
+    }
+    if field == "sample_size":
+        payload.update({"seed": 7, "sample_size": 10_001})
+    else:
+        payload["max_cases"] = 10_001
+
+    with pytest.raises(subprocess.CalledProcessError) as error:
+        run_helper(payload)
+
+    assert error.value.returncode == 2
+    assert error.value.stdout == ""
+
+
+@pytest.mark.parametrize(
+    "dimensions",
+    [
+        {1: {"values": [1]}},
+        {1: {"values": [1]}, "n": {"values": [2]}},
+    ],
+)
+def test_plan_case_matrix_requires_string_dimension_keys(dimensions):
+    with pytest.raises(HELPER.InputError, match="dimension names must be strings"):
+        HELPER.plan_case_matrix({"dimensions": dimensions, "max_cases": 1})
+
+
+def test_plan_case_matrix_rejects_surrogate_through_api():
+    with pytest.raises(HELPER.InputError, match="surrogate"):
+        HELPER.plan_case_matrix({"dimensions": {"n": {"values": ["\ud800"]}}, "max_cases": 1})
+
+
+def test_plan_case_matrix_rejects_surrogate_through_subprocess():
+    input_text = json.dumps(
+        {"dimensions": {"n": {"values": ["\ud800"]}}, "max_cases": 1},
+        ensure_ascii=True,
+    )
+
+    result = run_helper_text(input_text)
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr.startswith("error:")
+    assert "surrogate" in result.stderr.lower()
 
 
 def test_plan_case_matrix_rejects_invalid_boundary_type():
@@ -199,7 +280,16 @@ def test_helper_ast_has_no_execution_or_network_imports_and_no_writes():
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported_modules.add(node.module)
 
-    forbidden_roots = {"subprocess", "socket", "urllib", "requests", "my_project"}
+    forbidden_roots = {
+        "subprocess",
+        "socket",
+        "urllib",
+        "requests",
+        "os",
+        "shutil",
+        "pathlib",
+        "my_project",
+    }
     assert not any(
         module == forbidden or module.startswith(f"{forbidden}.")
         for module in imported_modules
@@ -209,14 +299,23 @@ def test_helper_ast_has_no_execution_or_network_imports_and_no_writes():
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             if isinstance(node.func, ast.Name):
-                assert node.func.id != "open"
+                assert node.func.id not in {"open", "eval", "exec"}
             if isinstance(node.func, ast.Attribute):
                 assert node.func.attr not in {
+                    "write",
                     "write_text",
                     "write_bytes",
                     "unlink",
                     "mkdir",
+                    "rmdir",
+                    "rename",
+                    "replace",
                     "touch",
+                    "truncate",
+                    "chmod",
+                    "chown",
+                    "symlink_to",
+                    "hardlink_to",
                 }
 
 
