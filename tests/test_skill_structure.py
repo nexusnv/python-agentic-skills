@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import ast
+import json
 import re
 from collections.abc import Iterator
 from pathlib import Path
@@ -27,8 +27,9 @@ EXPECTED_REFERENCE_FILES = {
         }
     ),
 }
-FRONTMATTER_FIELDS = frozenset({"name", "description", "license", "compatibility", "metadata"})
-FOLDED_SCALAR_MARKERS = frozenset({">", ">-", ">+"})
+TOP_LEVEL_FIELDS = frozenset({"name", "description", "license", "compatibility", "metadata"})
+REQUIRED_FRONTMATTER_FIELDS = frozenset({"name", "description", "license"})
+FOLDED_SCALAR_MARKER = ">-"
 MAX_SKILL_LINES = 500
 MAX_SKILL_WORDS = 5_000
 MAX_SKILL_CHARACTERS = 20_000
@@ -48,24 +49,54 @@ def _frontmatter_error(path: Path, detail: str) -> AssertionError:
     return AssertionError(f"{path}: malformed frontmatter: {detail}")
 
 
-def _parse_scalar(path: Path, key: str, raw_value: str) -> str:
-    value = raw_value.strip()
-    if not value:
-        raise _frontmatter_error(path, f"{key} must not be empty")
+def _parse_quoted_scalar(path: Path, key: str, value: str) -> str:
+    quote = value[0]
+    if len(value) < 2 or value[-1] != quote:
+        raise _frontmatter_error(path, f"{key} has an unterminated quoted scalar")
 
-    if value[0] in {"'", '"'}:
+    if quote == '"':
         try:
-            parsed = ast.literal_eval(value)
-        except (SyntaxError, ValueError) as error:
-            raise _frontmatter_error(path, f"{key} has an invalid quoted scalar") from error
+            parsed = json.loads(value)
+        except json.JSONDecodeError as error:
+            raise _frontmatter_error(path, f"{key} has an invalid double-quoted scalar") from error
         if not isinstance(parsed, str):
             raise _frontmatter_error(path, f"{key} must be a string")
         return parsed
 
-    if value.startswith(("&", "*", "!", "[", "]", "{", "}", "|", ">", "%", "@", "`")):
+    body = value[1:-1]
+    parsed: list[str] = []
+    index = 0
+    while index < len(body):
+        character = body[index]
+        if character == "'":
+            if index + 1 < len(body) and body[index + 1] == "'":
+                parsed.append("'")
+                index += 2
+                continue
+            raise _frontmatter_error(path, f"{key} has an invalid single-quoted scalar")
+        parsed.append(character)
+        index += 1
+    return "".join(parsed)
+
+
+def _parse_scalar(path: Path, key: str, raw_value: str) -> str:
+    value = raw_value.strip()
+    if not value:
+        raise _frontmatter_error(path, f"{key} must not be empty")
+    if "\t" in raw_value:
+        raise _frontmatter_error(path, f"{key} uses a tab")
+
+    if value[0] in {"'", '"'}:
+        return _parse_quoted_scalar(path, key, value)
+
+    if value.startswith(("&", "*", "!", "[", "]", "{", "}", "|", ">", "%", "@", "`", "#")):
         raise _frontmatter_error(path, f"{key} uses an unsupported scalar form")
-    if "\t" in raw_value or " #" in value:
-        raise _frontmatter_error(path, f"{key} uses an unsupported inline comment or tab")
+    if re.match(r"^(?:-|\?|:)(?:\s|$)", value) or value.startswith(","):
+        raise _frontmatter_error(path, f"{key} has invalid plain scalar syntax")
+    if re.search(r":(?:\s|$)", value):
+        raise _frontmatter_error(path, f"{key} has invalid plain scalar syntax")
+    if " #" in value:
+        raise _frontmatter_error(path, f"{key} uses an unsupported inline comment")
     return value
 
 
@@ -75,12 +106,14 @@ def _parse_folded_scalar(path: Path, key: str, lines: list[str], index: int) -> 
         line = lines[index]
         if line and not line[0].isspace():
             break
+        if line and "\t" in line:
+            raise _frontmatter_error(path, f"{key} folded scalar uses a tab")
         folded_lines.append(line.strip())
         index += 1
 
-    if not any(folded_lines):
+    if not folded_lines or not any(folded_lines):
         raise _frontmatter_error(path, f"{key} folded scalar must contain a value")
-    return " ".join(part for part in folded_lines if part), index
+    return " ".join(folded_lines), index
 
 
 def _parse_metadata(path: Path, lines: list[str], index: int) -> tuple[dict[str, str], int]:
@@ -88,11 +121,9 @@ def _parse_metadata(path: Path, lines: list[str], index: int) -> tuple[dict[str,
     while index < len(lines):
         line = lines[index]
         if not line.startswith("  "):
-            if not line:
-                raise _frontmatter_error(path, "metadata contains a blank line")
             break
-        if line.startswith("   ") or line.startswith("\t"):
-            raise _frontmatter_error(path, "metadata values must be a flat string map")
+        if not line.strip() or line.startswith("   ") or line.startswith("\t"):
+            raise _frontmatter_error(path, "metadata must contain flat key/value entries")
 
         match = METADATA_FIELD.fullmatch(line)
         if match is None:
@@ -103,6 +134,8 @@ def _parse_metadata(path: Path, lines: list[str], index: int) -> tuple[dict[str,
         metadata[key] = _parse_scalar(path, f"metadata.{key}", raw_value)
         index += 1
 
+    if not metadata:
+        raise _frontmatter_error(path, "metadata must contain a non-empty string map")
     return metadata, index
 
 
@@ -144,7 +177,7 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
         if match is None:
             raise _frontmatter_error(path, "contains an invalid top-level field")
         key, raw_value = match.groups()
-        if key not in FRONTMATTER_FIELDS:
+        if key not in TOP_LEVEL_FIELDS:
             raise _frontmatter_error(path, f"unsupported top-level field {key!r}")
         if key in frontmatter:
             raise _frontmatter_error(path, f"top-level field {key!r} is duplicated")
@@ -156,20 +189,20 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
             frontmatter[key] = metadata
             continue
 
-        if raw_value in FOLDED_SCALAR_MARKERS:
+        if raw_value == FOLDED_SCALAR_MARKER:
             value, index = _parse_folded_scalar(path, key, frontmatter_lines, index + 1)
         else:
             value = _parse_scalar(path, key, raw_value or "")
             index += 1
         frontmatter[key] = value
 
-    missing_fields = FRONTMATTER_FIELDS - frontmatter.keys()
+    missing_fields = REQUIRED_FRONTMATTER_FIELDS - frontmatter.keys()
     if missing_fields:
         missing = ", ".join(sorted(missing_fields))
         raise _frontmatter_error(path, f"is missing required fields: {missing}")
 
-    metadata = frontmatter["metadata"]
-    if (
+    metadata = frontmatter.get("metadata")
+    if metadata is not None and (
         not isinstance(metadata, dict)
         or not metadata
         or not all(
@@ -197,6 +230,17 @@ def local_link_target(source: Path, target: str) -> Path | None:
 
 def declared_asset_paths(skill: Path) -> set[str]:
     return set(ASSET_PATH.findall(skill.read_text(encoding="utf-8")))
+
+
+def declared_reference_links(skill: Path) -> set[str]:
+    links: set[str] = set()
+    for target in markdown_targets(skill.read_text(encoding="utf-8")):
+        parsed = urlsplit(target.strip())
+        if parsed.scheme or parsed.netloc or target.startswith(("/", "//")):
+            continue
+        if parsed.path.startswith("references/"):
+            links.add(unquote(parsed.path))
+    return links
 
 
 def test_exactly_expected_skills_are_discovered():
@@ -228,6 +272,31 @@ def test_frontmatter_parser_rejects_malformed_frontmatter(tmp_path, body, messag
         parse_frontmatter(skill)
 
 
+def test_frontmatter_parser_accepts_required_fields_without_optional_sections(tmp_path):
+    skill = tmp_path / "SKILL.md"
+    skill.write_text(
+        "---\nname: example\ndescription: 'Use when: testing is requested'\nlicense: MIT\n---\n",
+        encoding="utf-8",
+    )
+
+    assert parse_frontmatter(skill) == {
+        "name": "example",
+        "description": "Use when: testing is requested",
+        "license": "MIT",
+    }
+
+
+def test_frontmatter_parser_rejects_invalid_plain_scalar_syntax(tmp_path):
+    skill = tmp_path / "SKILL.md"
+    skill.write_text(
+        "---\nname: example\ndescription: Use when: testing\nlicense: MIT\n---\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError, match="malformed frontmatter:.*invalid plain scalar syntax"):
+        parse_frontmatter(skill)
+
+
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
 def test_frontmatter_is_portable_and_complete(skill):
     frontmatter = parse_frontmatter(skill)
@@ -235,21 +304,25 @@ def test_frontmatter_is_portable_and_complete(skill):
     assert frontmatter["name"] == skill.parent.name
     assert isinstance(frontmatter["description"], str)
     assert frontmatter["description"].strip()
-    assert frontmatter["description"].startswith("Use when")
+    assert "Use when" in frontmatter["description"]
     assert frontmatter["license"] == "MIT"
-    assert frontmatter.get("compatibility")
-    metadata = frontmatter.get("metadata")
-    assert isinstance(metadata, dict)
-    assert set(metadata) >= {"author", "version"}
-    assert all(isinstance(key, str) and isinstance(value, str) for key, value in metadata.items())
-    assert metadata["author"].strip()
-    assert metadata["version"].strip()
+    if "compatibility" in frontmatter:
+        assert (
+            isinstance(frontmatter["compatibility"], str) and frontmatter["compatibility"].strip()
+        )
+    if "metadata" in frontmatter:
+        metadata = frontmatter["metadata"]
+        assert isinstance(metadata, dict)
+        assert all(
+            isinstance(key, str) and isinstance(value, str) for key, value in metadata.items()
+        )
+        assert all(value.strip() for value in metadata.values())
 
 
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
 def test_frontmatter_has_no_client_specific_keys(skill):
     frontmatter = parse_frontmatter(skill)
-    metadata = frontmatter.get("metadata")
+    metadata = frontmatter.get("metadata", {})
 
     assert isinstance(metadata, dict)
     assert not {"disable-model-invocation", "paths"} & frontmatter.keys()
@@ -303,6 +376,15 @@ def test_skill_has_exact_approved_reference_files(skill):
     }
 
     assert actual_references == EXPECTED_REFERENCE_FILES[skill_dir.name]
+
+
+@pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
+def test_skill_declares_each_reference_as_a_relative_markdown_link(skill):
+    expected_links = {
+        f"references/{reference}" for reference in EXPECTED_REFERENCE_FILES[skill.parent.name]
+    }
+
+    assert declared_reference_links(skill) == expected_links
 
 
 @pytest.mark.parametrize("skill_name", sorted(EXPECTED_SKILLS))

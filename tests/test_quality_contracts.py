@@ -66,6 +66,64 @@ REQUIRED_REPORT_FIELDS = {
         }
     ),
 }
+REPORT_TEMPLATE_MARKERS = {
+    "python-blackbox-testing": {
+        "boundary": ("Boundary",),
+        "consumer": ("Consumer",),
+        "runner and environment": (
+            "Runner and environment",
+            "Environment fingerprint",
+        ),
+        "expected result and failure": (
+            "Expected result",
+            "Expected failure / not-applicable reason",
+        ),
+        "properties and invariants": ("Properties/invariants",),
+        "coverage areas": ("Coverage areas/plan",),
+        "safety and approvals": (
+            "Safety and privacy",
+            "run_approval_status",
+            "credential_approval_status",
+        ),
+        "execution and scenario IDs": ("execution_id", "scenario_id"),
+        "result states": ("pass / fail / skip / expected-failure",),
+        "minimized reproducers": ("Failures and minimized reproducers",),
+        "retained regressions": ("Retained regressions",),
+        "not-run": ("Not run",),
+        "limitations": ("Coverage gaps and limitations",),
+    },
+    "python-parameterized-testing": {
+        "target and boundary": ("Target behavior or public boundary",),
+        "runner and environment": (
+            "Runner and environment",
+            "Project-native runner and version",
+            "Environment fingerprint",
+        ),
+        "valid, invalid, and unsupported domains": (
+            "Valid domain",
+            "Invalid domain",
+            "Unsupported domain",
+        ),
+        "properties": ("Property statements and quantified invariants",),
+        "coverage": ("Coverage plan and input families",),
+        "fixed, generated, discarded, and truncated counts": (
+            "Fixed-example count",
+            "Generated-witness count",
+            "Discarded-case count",
+            "Truncated",
+        ),
+        "seed and replay": ("Seed and generator", "replay"),
+        "exact command and exit status": ("exact command", "exit status"),
+        "result states": ("pass / fail / skip / expected-failure",),
+        "minimized reproducers and regressions": (
+            "Failures and minimized reproducers",
+            "Retained fixed regression",
+        ),
+        "safety": ("Safety and privacy",),
+        "not-run": ("Not run and skips",),
+        "limitations": ("Limitations and conclusion",),
+    },
+}
 ALLOWED_HELPER_IMPORTS = frozenset(
     {
         "__future__",
@@ -79,31 +137,31 @@ ALLOWED_HELPER_IMPORTS = frozenset(
         "typing",
     }
 )
-FORBIDDEN_HELPER_IMPORTS = frozenset(
-    {
-        "builtins",
-        "ctypes",
-        "importlib",
-        "os",
-        "pathlib",
-        "requests",
-        "runpy",
-        "shutil",
-        "socket",
-        "subprocess",
-        "urllib",
-    }
-)
-FORBIDDEN_HELPER_NAMES = frozenset(
+FORBIDDEN_DYNAMIC_MODULES = frozenset({"builtins", "ctypes", "importlib", "runpy"})
+FORBIDDEN_DYNAMIC_NAMES = frozenset(
     {
         "CDLL",
         "__import__",
+        "compile",
+        "eval",
+        "exec",
+        "getattr",
+        "globals",
+        "import_module",
+        "locals",
+        "run_path",
+        "vars",
+        "builtins",
+        "ctypes",
+        "importlib",
+        "runpy",
+    }
+)
+FORBIDDEN_DIRECT_CALL_NAMES = frozenset(
+    {
         "call",
         "check_call",
         "check_output",
-        "exec",
-        "eval",
-        "import_module",
         "open",
         "popen",
         "Popen",
@@ -112,34 +170,33 @@ FORBIDDEN_HELPER_NAMES = frozenset(
         "rmdir",
         "rmtree",
         "run",
-        "run_path",
         "system",
         "unlink",
         "write_bytes",
         "write_text",
     }
 )
-RISKY_SAFETY_PROMPT_PATTERNS = (
-    r"\blive\b",
-    r"\bexternal\b",
-    r"\bproduction\b",
-    r"\b(?:destructive|delete|recursively delete)\b",
-    r"\bcredential\b",
-    r"\breal\s+(?:bearer\s+)?(?:token|secret|credential)\b",
-    r"\b(?:paid|cost[- ]incurring|incur(?:s|red|ring)?|monetary budget)\b",
-    r"\b(?:unisolated|privileged|host[- ]mounted|host[- ]networked|side[- ]effectful)\b",
-    r"\bremote\s+sandbox\b.*\b(?:unverified|cannot be verified)\b",
+UNSAFE_MODULE_ROOTS = frozenset(
+    {"builtins", "ctypes", "importlib", "os", "pathlib", "runpy", "shutil", "subprocess"}
 )
-SYNTHETIC_DATA_PROMPT_PATTERNS = (
-    r"\bsynthetic\b",
-    r"\bfake\b",
-    r"\b(?:customer|production|user)\s+(?:data|records)\b",
+FILESYSTEM_MUTATION_METHODS = frozenset(
+    {"open", "remove", "removedirs", "rmdir", "rmtree", "unlink", "write_bytes", "write_text"}
 )
-REAL_SECRET_PROMPT_PATTERNS = (r"\breal\s+(?:bearer\s+)?(?:token|secret|credential)\b",)
-PRODUCTION_DATA_PROMPT_PATTERNS = (
-    r"\b(?:real\s+)?customer\s+(?:data|records)\b",
-    r"\bproduction\s+(?:data|records)\b",
+RISK_CLASSES = frozenset(
+    {
+        "local",
+        "redaction",
+        "live",
+        "external",
+        "destructive",
+        "credential",
+        "paid",
+        "flaky",
+        "production",
+    }
 )
+APPROVAL_REQUIRED_RISKS = frozenset({"live", "external", "destructive", "credential", "paid"})
+NO_REAL_DATA_RISKS = frozenset({"live", "production", "paid"})
 REAL_SECRET_REFUSAL_FIELDS = {
     "credential_use",
     "real_credential_use",
@@ -153,6 +210,15 @@ PRODUCTION_DATA_REFUSAL_FIELDS = {
     "customer_or_production_data_use",
     "production_or_customer_data_use",
 }
+CREDENTIAL_PROHIBITION_FIELDS = {
+    "real_user_or_production_credential_accessed",
+    "real_user_production_credential_accessed",
+}
+REDACTION_FIELDS = {
+    "raw_output_persisted",
+    "raw_sensitive_output_recorded",
+    "secret_value_recorded",
+}
 
 
 def skill_files() -> list[Path]:
@@ -164,6 +230,16 @@ def load_cases(skill: Path) -> list[dict[str, Any]]:
     cases = yaml.safe_load(cases_path.read_text(encoding="utf-8"))
     assert isinstance(cases, list), f"{cases_path} must contain a top-level list"
     return cases
+
+
+def assert_report_template_contains(skill_name: str) -> None:
+    template_path = SKILLS_ROOT / skill_name / "references" / "evidence-report.md"
+    assert template_path.is_file(), f"missing installed evidence template: {template_path}"
+    template = template_path.read_text(encoding="utf-8").casefold()
+    for concept, markers in REPORT_TEMPLATE_MARKERS[skill_name].items():
+        assert all(marker.casefold() in template for marker in markers), (
+            f"{template_path} lacks canonical {concept} fields"
+        )
 
 
 def fixture_by_id(skill: Path, fixture_id: str) -> dict[str, Any]:
@@ -185,40 +261,6 @@ def semantic_text(value: Any) -> str:
 
 def contains_any(text: str, *patterns: str) -> bool:
     return any(re.search(pattern, text) for pattern in patterns)
-
-
-def has_boolean_expectation(
-    expected: Any,
-    subject_patterns: tuple[str, ...],
-    wanted: bool,
-) -> bool:
-    if not isinstance(expected, dict):
-        return False
-    for key, value in expected.items():
-        if isinstance(value, dict):
-            if has_boolean_expectation(value, subject_patterns, wanted):
-                return True
-        elif isinstance(value, list):
-            if any(has_boolean_expectation(item, subject_patterns, wanted) for item in value):
-                return True
-        elif value is wanted and contains_any(semantic_text(key), *subject_patterns):
-            return True
-    return False
-
-
-def safety_prompt_text(prompt: str) -> str:
-    text = prompt.casefold()
-    for negated_clause in (
-        r"\b(?:it )?does not authorize\b.*?(?:\.|$)",
-        r"\bdo not treat this approval as permission to use\b.*?(?:\.|$)",
-        r"\bcannot access\b.*?(?:\.|$)",
-    ):
-        text = re.sub(negated_clause, " ", text)
-    return re.sub(r"[^a-z0-9]+", " ", text).strip()
-
-
-def safety_prompt_requires_approval(prompt: str) -> bool:
-    return contains_any(safety_prompt_text(prompt), *RISKY_SAFETY_PROMPT_PATTERNS)
 
 
 def assert_false_refusal_field(
@@ -263,12 +305,23 @@ def test_skill_has_concise_safety_and_output_language(skill):
 
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
 def test_eval_fixture_shape(skill):
+    fixture_ids: list[str] = []
     for index, fixture in enumerate(load_cases(skill)):
         context = f"{skill.parent.name} fixture {index}"
         assert isinstance(fixture, dict), f"{context} must be a mapping"
         assert set(fixture) == REQUIRED_FIXTURE_KEYS, f"{context} has the wrong top-level keys"
-        assert all(fixture[key] for key in REQUIRED_FIXTURE_KEYS), f"{context} has a blank field"
-        assert fixture["kind"] in REQUIRED_FIXTURE_KINDS, f"{context} has an unknown kind"
+
+        fixture_id = fixture["id"]
+        assert isinstance(fixture_id, str) and fixture_id.strip(), (
+            f"{context} must have a non-empty string id"
+        )
+        fixture_ids.append(fixture_id)
+        assert isinstance(fixture["prompt"], str) and fixture["prompt"].strip(), (
+            f"{context} must have a non-empty string prompt"
+        )
+        assert isinstance(fixture["kind"], str) and fixture["kind"] in REQUIRED_FIXTURE_KINDS, (
+            f"{context} has an unknown kind"
+        )
 
         expected = fixture["expected"]
         assert isinstance(expected, dict), f"{context} expected must be a mapping"
@@ -281,6 +334,9 @@ def test_eval_fixture_shape(skill):
         assert all(isinstance(area, str) and area.strip() for area in coverage), (
             f"{context} has a non-string or blank coverage area"
         )
+    assert len(fixture_ids) == len(set(fixture_ids)), (
+        f"{skill.parent.name} eval fixture ids must be globally unique"
+    )
 
 
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
@@ -288,6 +344,11 @@ def test_eval_fixture_kinds_cover_positive_near_miss_safety_and_evidence(skill):
     kinds = {fixture["kind"] for fixture in load_cases(skill)}
 
     assert REQUIRED_FIXTURE_KINDS <= kinds
+
+
+@pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
+def test_installed_evidence_templates_contain_canonical_report_fields(skill):
+    assert_report_template_contains(skill.parent.name)
 
 
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
@@ -334,18 +395,99 @@ def test_blackbox_retry_results_are_linked_structural_records():
         assert isinstance(expected[field], list) and expected[field], (
             f"{field} must be a non-empty list"
         )
-    for execution in expected["execution_records"]:
-        assert {"execution_id", "attempt", "scenario_id"} <= execution.keys()
-    for result in expected["result_records"]:
-        assert {"scenario_id", "execution_id", "result_state"} <= result.keys()
+
+    execution_records = expected["execution_records"]
+    execution_ids: list[str] = []
+    scenario_ids_by_execution: dict[str, set[str]] = {}
+    for execution in execution_records:
+        assert isinstance(execution, dict)
+        assert set(execution) == {"execution_id", "attempt", "scenario_id"} or set(execution) == {
+            "execution_id",
+            "attempt",
+            "scenario_ids",
+        }, "execution records must use the approved execution schema"
+        execution_id = execution["execution_id"]
+        assert isinstance(execution_id, str) and execution_id.strip()
+        execution_ids.append(execution_id)
+        raw_scenario_ids = execution.get("scenario_ids", execution.get("scenario_id"))
+        if isinstance(raw_scenario_ids, str):
+            scenarios = [raw_scenario_ids]
+        else:
+            assert isinstance(raw_scenario_ids, list) and raw_scenario_ids
+            scenarios = raw_scenario_ids
+        assert all(isinstance(scenario, str) and scenario.strip() for scenario in scenarios)
+        assert len(scenarios) == len(set(scenarios)), (
+            f"execution {execution_id} repeats a scenario ID"
+        )
+        scenario_ids_by_execution[execution_id] = set(scenarios)
+
+    assert len(execution_ids) == len(set(execution_ids)), "execution IDs must be unique"
+    assert expected["execution_count"] == len(execution_records)
+
+    result_records = expected["result_records"]
+    result_keys: list[tuple[str, str]] = []
+    for result in result_records:
+        assert isinstance(result, dict)
+        assert set(result) == {"scenario_id", "execution_id", "result_state"}
+        assert isinstance(result["scenario_id"], str) and result["scenario_id"].strip()
+        assert isinstance(result["execution_id"], str) and result["execution_id"].strip()
         assert result["result_state"] in {"pass", "fail", "skip", "expected-failure"}
-    for not_run in expected["not_run_records"]:
-        assert {"scenario_id", "execution_id", "result_state", "reason"} <= not_run.keys()
+        result_keys.append((result["execution_id"], result["scenario_id"]))
+        assert result["execution_id"] in scenario_ids_by_execution, (
+            f"result references unknown execution {result['execution_id']}"
+        )
+        assert result["scenario_id"] in scenario_ids_by_execution[result["execution_id"]], (
+            f"result scenario {result['scenario_id']} is not linked to its execution"
+        )
+    assert len(result_keys) == len(set(result_keys)), "result records must be unique"
+
+    not_run_records = expected["not_run_records"]
+    not_run_scenarios: list[str] = []
+    for not_run in not_run_records:
+        assert isinstance(not_run, dict)
+        assert set(not_run) == {
+            "scenario_id",
+            "execution_id",
+            "result_state",
+            "run_approval_status",
+            "reason",
+        }
+        assert isinstance(not_run["scenario_id"], str) and not_run["scenario_id"].strip()
         assert not_run["execution_id"] == "N/A"
         assert not_run["result_state"] == "not-run"
+        assert (
+            isinstance(not_run["run_approval_status"], str)
+            and not_run["run_approval_status"].strip()
+        )
+        assert isinstance(not_run["reason"], str) and not_run["reason"].strip()
+        not_run_scenarios.append(not_run["scenario_id"])
+    assert len(not_run_scenarios) == len(set(not_run_scenarios))
+    assert not set(not_run_scenarios) & set().union(*scenario_ids_by_execution.values())
+
+    retry_linkage = expected["retry_linkage"]
+    assert isinstance(retry_linkage, dict)
+    assert set(retry_linkage) == {"scenario_id", "execution_ids"}
+    assert isinstance(retry_linkage["scenario_id"], str) and retry_linkage["scenario_id"].strip()
+    retry_execution_ids = retry_linkage["execution_ids"]
+    assert isinstance(retry_execution_ids, list) and retry_execution_ids
+    assert all(
+        isinstance(execution_id, str) and execution_id.strip()
+        for execution_id in retry_execution_ids
+    )
+    assert len(retry_execution_ids) == len(set(retry_execution_ids))
+    retry_scenario = retry_linkage["scenario_id"]
+    for execution_id in retry_execution_ids:
+        assert execution_id in scenario_ids_by_execution
+        assert retry_scenario in scenario_ids_by_execution[execution_id]
+        assert (execution_id, retry_scenario) in set(result_keys), (
+            f"retry linkage references unknown result for {execution_id}"
+        )
+    assert all(
+        scenario_ids_by_execution[execution_id] == {retry_scenario}
+        for execution_id in retry_execution_ids
+    )
     assert expected["execution_id_linkage_required"] is True
     assert expected["retry_linkage_required"] is True
-    assert isinstance(expected["retry_linkage"], dict)
 
 
 def test_parameterized_evidence_mapping_checks_domains_counts_replay_and_limits():
@@ -385,48 +527,41 @@ def test_safety_fixtures_encode_appropriate_gates(skill):
             continue
 
         expected = fixture["expected"]
-        prompt = fixture["prompt"]
         context = f"{fixture['id']} ({skill.parent.name})"
+        risk_class = expected.get("risk_class")
+        assert risk_class in RISK_CLASSES, f"{context} lacks a valid risk_class"
         assert isinstance(expected.get("requires_approval"), bool)
         assert expected.get("must_not_modify_product_code") is True
 
-        if safety_prompt_requires_approval(prompt):
+        if risk_class in APPROVAL_REQUIRED_RISKS:
             assert expected["requires_approval"] is True, (
-                f"{context} requests an approval-gated operation"
+                f"{context} is an approval-gated {risk_class} risk"
             )
 
-        if contains_any(safety_prompt_text(prompt), *SYNTHETIC_DATA_PROMPT_PATTERNS):
-            assert expected.get("synthetic_data_default") is True, (
-                f"{context} lacks synthetic-data gating"
-            )
-
-        if contains_any(safety_prompt_text(prompt), *REAL_SECRET_PROMPT_PATTERNS):
+        if risk_class in NO_REAL_DATA_RISKS:
             assert_false_refusal_field(expected, REAL_SECRET_REFUSAL_FIELDS, context)
-
-        if contains_any(safety_prompt_text(prompt), *PRODUCTION_DATA_PROMPT_PATTERNS):
             assert_false_refusal_field(expected, PRODUCTION_DATA_REFUSAL_FIELDS, context)
 
-        if contains_any(
-            safety_prompt_text(prompt),
-            r"redact",
-            r"secret",
-            r"token",
-            r"personal data",
-            r"unbounded",
-        ):
-            has_redaction = has_boolean_expectation(expected, (r"redact",), True)
-            excludes_sensitive_output = has_boolean_expectation(
-                expected,
-                (r"secret", r"raw.{0,20}(?:output|response)", r"sensitive.{0,20}output"),
-                False,
+        if risk_class == "credential":
+            status = expected.get("credential_approval_status")
+            assert isinstance(status, str) and status.strip(), (
+                f"{context} lacks credential approval status"
             )
-            assert has_redaction or excludes_sensitive_output, (
-                f"{fixture['id']} lacks a concrete redaction expectation"
+            scope = expected.get("credential_approval_scope")
+            assert isinstance(scope, (str, list)) and scope, (
+                f"{context} lacks credential approval scope"
             )
+            assert expected.get("secret_value_recorded") is False
+            assert_false_refusal_field(expected, CREDENTIAL_PROHIBITION_FIELDS, context)
 
-        if expected.get("approved_test_credential_used") is True:
-            assert "credential_approval_status" in expected
-            assert "credential_approval_scope" in expected
+        if risk_class == "redaction":
+            assert (
+                expected.get("redaction_required") is True
+                or expected.get("redact_sensitive_output") is True
+            ), f"{context} lacks a redaction expectation"
+            assert any(expected.get(field) is False for field in REDACTION_FIELDS), (
+                f"{context} lacks a concrete no-raw-output expectation"
+            )
 
 
 def test_parameterized_fixtures_cover_generation_contracts():
@@ -509,28 +644,62 @@ def _imported_roots(tree: ast.AST) -> set[str]:
         if isinstance(node, ast.Import):
             imported_roots.update(alias.name.split(".", maxsplit=1)[0] for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
-            if node.module:
-                imported_roots.add(node.module.split(".", maxsplit=1)[0])
             if node.level:
-                imported_roots.update(alias.name.split(".", maxsplit=1)[0] for alias in node.names)
+                imported_roots.add(".")
+            elif node.module:
+                imported_roots.add(node.module.split(".", maxsplit=1)[0])
     return imported_roots
+
+
+def _root_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return _root_name(node.value)
+    return None
+
+
+def _is_forbidden_direct_call(node: ast.Call) -> bool:
+    if isinstance(node.func, ast.Name):
+        return node.func.id in FORBIDDEN_DIRECT_CALL_NAMES
+    if not isinstance(node.func, ast.Attribute):
+        return False
+
+    attribute = node.func.attr
+    if attribute in FORBIDDEN_DYNAMIC_NAMES:
+        return True
+    if attribute in FILESYSTEM_MUTATION_METHODS:
+        return True
+    return (
+        attribute
+        in {
+            "call",
+            "check_call",
+            "check_output",
+            "Popen",
+            "run",
+            "system",
+            "popen",
+        }
+        and _root_name(node.func.value) in UNSAFE_MODULE_ROOTS
+    )
 
 
 def test_case_matrix_helper_uses_only_allowlisted_standard_library_imports():
     tree = ast.parse(HELPER.read_text(encoding="utf-8"))
     imported_roots = _imported_roots(tree)
 
-    assert not imported_roots & FORBIDDEN_HELPER_IMPORTS
+    assert not imported_roots & FORBIDDEN_DYNAMIC_MODULES
     assert imported_roots <= ALLOWED_HELPER_IMPORTS, (
         f"helper imports outside the allowlist: {sorted(imported_roots - ALLOWED_HELPER_IMPORTS)}"
     )
 
 
-def test_case_matrix_helper_uses_no_execution_or_filesystem_mutation_operations():
+def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
     tree = ast.parse(HELPER.read_text(encoding="utf-8"))
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Name):
-            assert node.id not in FORBIDDEN_HELPER_NAMES
-        elif isinstance(node, ast.Attribute):
-            assert node.attr not in FORBIDDEN_HELPER_NAMES
+            assert node.id not in FORBIDDEN_DYNAMIC_NAMES
+        elif isinstance(node, ast.Call):
+            assert not _is_forbidden_direct_call(node)
