@@ -13,11 +13,13 @@ runner.
 Install the development dependencies from the repository root:
 
 ```bash
-uv sync --group dev
+uv sync --locked --group dev
 ```
 
 The `pyproject.toml` contains virtual project metadata for uv: it has a Python floor, no runtime
-dependencies, and no build backend. The project is explicitly non-distributable.
+dependencies, and no build backend. The project is explicitly non-distributable. `uv.lock` is committed
+for reproducible development setup. Regenerate it deliberately with `uv lock` only when the development
+dependency declarations change, then review the lockfile diff.
 
 ## Add or change a skill
 
@@ -116,7 +118,7 @@ semantic evaluation, and they should not contain real credentials, personal data
 Run the checks that apply to the current checkout from the repository root:
 
 ```bash
-uv sync --group dev
+uv sync --locked --group dev
 python -m json.tool skills.sh.json >/dev/null
 uv run --group dev ruff check .
 uv run --group dev ruff format --check .
@@ -145,8 +147,16 @@ uv run --group dev pytest tests/test_skill_structure.py
 ```
 
 That future test is responsible for validating skill metadata, required files, and relative Markdown
-links. The `npx skills add . --list` quick-start is intentionally unpinned; CI should pin a verified
-skills CLI version after compatibility verification rather than guessing a version.
+links. Once the skills and test files are added, run the complete future repository test suite:
+
+```bash
+uv run --group dev pytest
+```
+
+This command covers the structural, quality-contract, case-matrix, and future tests. The current
+checkout has no `tests/` files, so the command currently reports no tests collected; do not treat that
+as a passing suite. The `npx skills add . --list` quick-start is intentionally unpinned; CI should pin a
+verified skills CLI version after compatibility verification rather than guessing a version.
 
 The repository targets Python 3.10 and newer. The official `skills-ref` validator currently requires
 Python 3.11 or newer, so keep that version isolated to the validator step; do not raise the Python
@@ -197,4 +207,5 @@ Installation counts are not unique-user counts, and a finite test run is not a c
 Keep commits reviewable and focused. Separate research, design, skill behavior, tests/evals, and
 verification changes when practical. Before committing, run the relevant tests and validators, inspect
 `git diff`, run `git diff --check`, and write a commit message that describes the change without claiming
-results that were not observed.
+results that were not observed. After committing, run `git status --short` and confirm it is clean;
+`git diff --check` does not detect untracked files.
