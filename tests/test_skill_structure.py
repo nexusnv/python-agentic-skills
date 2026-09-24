@@ -541,6 +541,12 @@ def test_no_duplicate_root_skills_tree_exists():
     assert not (ROOT / "skills").exists()
 
 
+def test_skills_sh_manifest_is_valid_json():
+    manifest = json.loads((ROOT / "skills.sh.json").read_text(encoding="utf-8"))
+
+    assert isinstance(manifest, dict), "skills.sh.json must contain a JSON object"
+
+
 @pytest.mark.parametrize(
     ("body", "message"),
     [
@@ -550,6 +556,16 @@ def test_no_duplicate_root_skills_tree_exists():
             "unsupported scalar form",
         ),
         ("---\nname: example\n", "closing frontmatter fence"),
+        (
+            "---\nname: example\ndescription: Use when testing\n"
+            "license: MIT\nlicense: MIT-0\n---\n",
+            "top-level field 'license' is duplicated",
+        ),
+        (
+            "---\nname: example\ndescription: Use when testing\nlicense: MIT\n"
+            "metadata:\n  version: 1\n  version: 2\n---\n",
+            "metadata key 'version' is duplicated",
+        ),
     ],
 )
 def test_frontmatter_parser_rejects_malformed_frontmatter(tmp_path, body, message):

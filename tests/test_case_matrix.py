@@ -418,8 +418,42 @@ def test_plan_case_matrix_rejects_non_json_value_through_api():
         HELPER.plan_case_matrix({"dimensions": {"n": {"values": [object()]}}, "max_cases": 1})
 
 
-def test_helper_ast_has_no_execution_or_network_imports_and_no_writes():
-    tree = ast.parse(SCRIPT.read_text())
+FORBIDDEN_HELPER_IMPORT_ROOTS = {
+    "subprocess",
+    "socket",
+    "urllib",
+    "requests",
+    "os",
+    "shutil",
+    "pathlib",
+    "my_project",
+}
+FORBIDDEN_HELPER_CALL_NAMES = {"open", "eval", "exec"}
+FORBIDDEN_HELPER_WRITE_ATTRIBUTES = {
+    "write",
+    "write_text",
+    "write_bytes",
+    "unlink",
+    "mkdir",
+    "rmdir",
+    "rename",
+    "replace",
+    "touch",
+    "truncate",
+    "chmod",
+    "chown",
+    "symlink_to",
+    "hardlink_to",
+}
+
+
+def helper_safety_violations(source: str) -> list[str]:
+    """Single authoritative helper-safety check, based on the AST rather than substrings.
+
+    An AST walk catches forms a substring check misses, e.g. ``from subprocess import run``.
+    """
+    tree = ast.parse(source)
+    violations: list[str] = []
     imported_modules = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -427,43 +461,38 @@ def test_helper_ast_has_no_execution_or_network_imports_and_no_writes():
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported_modules.add(node.module)
 
-    forbidden_roots = {
-        "subprocess",
-        "socket",
-        "urllib",
-        "requests",
-        "os",
-        "shutil",
-        "pathlib",
-        "my_project",
-    }
-    assert not any(
-        module == forbidden or module.startswith(f"{forbidden}.")
-        for module in imported_modules
-        for forbidden in forbidden_roots
-    )
+    for module in sorted(imported_modules):
+        for forbidden in sorted(FORBIDDEN_HELPER_IMPORT_ROOTS):
+            if module == forbidden or module.startswith(f"{forbidden}."):
+                violations.append(f"forbidden import: {module}")
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name):
-                assert node.func.id not in {"open", "eval", "exec"}
-            if isinstance(node.func, ast.Attribute):
-                assert node.func.attr not in {
-                    "write",
-                    "write_text",
-                    "write_bytes",
-                    "unlink",
-                    "mkdir",
-                    "rmdir",
-                    "rename",
-                    "replace",
-                    "touch",
-                    "truncate",
-                    "chmod",
-                    "chown",
-                    "symlink_to",
-                    "hardlink_to",
-                }
+            if isinstance(node.func, ast.Name) and node.func.id in FORBIDDEN_HELPER_CALL_NAMES:
+                violations.append(f"forbidden call: {node.func.id}")
+            if isinstance(node.func, ast.Attribute) and (
+                node.func.attr in FORBIDDEN_HELPER_WRITE_ATTRIBUTES
+            ):
+                violations.append(f"forbidden call attribute: {node.func.attr}")
+    return violations
+
+
+def test_helper_ast_has_no_execution_or_network_imports_and_no_writes():
+    assert helper_safety_violations(SCRIPT.read_text()) == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from subprocess import run\nrun('echo unsafe')\n",
+        "import subprocess\n",
+        "import requests\n",
+        "from my_project import client\n",
+        "handle = object()\nhandle.write_text('data')\n",
+    ],
+)
+def test_helper_safety_check_detects_execution_and_network_bypasses(source):
+    assert helper_safety_violations(source)
 
 
 def test_plan_case_matrix_rejects_malformed_input():
@@ -497,11 +526,3 @@ def test_plan_case_matrix_preserves_explicit_boundaries():
         {"n": 4},
         {"n": 3},
     ]
-
-
-def test_helper_has_no_execution_or_network_imports():
-    source = SCRIPT.read_text()
-
-    assert "import subprocess" not in source
-    assert "import requests" not in source
-    assert "from my_project" not in source

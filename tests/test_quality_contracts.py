@@ -1589,11 +1589,9 @@ def test_report_table_parser_rejects_schema_defects(tmp_path, defect):
     source = SKILLS_ROOT / "python-blackbox-testing" / "references" / "evidence-report.md"
     content = source.read_text(encoding="utf-8")
     lines = content.splitlines()
-    header_index = next(
-        index
-        for index, line in enumerate(lines)
-        if line.startswith("| execution_id | scenario_ids | Environment mode | Isolation/scope")
-    )
+    header_prefix = "| execution_id | scenario_ids | Environment mode | Isolation/scope"
+    assert header_prefix in content, f"{source} must contain marker {header_prefix!r}"
+    header_index = next(index for index, line in enumerate(lines) if line.startswith(header_prefix))
     exact_table_rows = tuple(lines[header_index : header_index + 3])
     if defect == "wrong-column-count":
         content = content.replace(
@@ -1640,12 +1638,16 @@ def test_blackbox_evidence_fixture_checks_boundary_linkage_and_not_run_structura
 
 def assert_blackbox_retry_contract(expected: dict[str, Any]) -> None:
     execution_rows = expected["execution_rows_per_command_retry"]
-    assert type(execution_rows) is int
-    assert execution_rows == 2
-    assert type(expected["execution_count"]) is int
-    assert expected["per_scenario_result_rows"] is True
-    assert expected["command_level_result_state"] is False
-    assert expected["canonical_not_run_encoding"] == "result_state: not-run"
+    assert type(execution_rows) is int, "execution_rows_per_command_retry must be an int"
+    assert execution_rows == 2, "execution_rows_per_command_retry must equal 2"
+    assert type(expected["execution_count"]) is int, "execution_count must be an int"
+    assert expected["per_scenario_result_rows"] is True, "per_scenario_result_rows must be True"
+    assert expected["command_level_result_state"] is False, (
+        "command_level_result_state must be False"
+    )
+    assert expected["canonical_not_run_encoding"] == "result_state: not-run", (
+        "canonical_not_run_encoding must be result_state: not-run"
+    )
 
 
 def _assert_structured_retry_integrity(
@@ -1733,7 +1735,9 @@ def _assert_structured_retry_integrity(
                 f"retry result {result['execution_id']} must link to its predecessor"
             )
             assert isinstance(retry_of_execution_id, str) and retry_of_execution_id.strip()
-            assert retry_of_execution_id != result["execution_id"]
+            assert retry_of_execution_id != result["execution_id"], (
+                f"retry result {result['execution_id']} must not link to itself"
+            )
             assert retry_of_execution_id in case_ids_by_execution, (
                 f"retry references unknown execution {retry_of_execution_id}"
             )
@@ -1861,11 +1865,13 @@ def assert_blackbox_retry_integrity(expected: dict[str, Any]) -> None:
 
 
 def assert_parameterized_retry_integrity(expected: dict[str, Any]) -> None:
-    assert expected["retries_visible"] is True
-    assert expected["retry_count_reported"] is True
-    assert expected["final_pass_hides_retries"] is False
-    assert expected["retry_linkage_required"] is True
-    assert expected["execution_id_linkage_required"] is True
+    assert expected["retries_visible"] is True, "retries_visible must be True"
+    assert expected["retry_count_reported"] is True, "retry_count_reported must be True"
+    assert expected["final_pass_hides_retries"] is False, "final_pass_hides_retries must be False"
+    assert expected["retry_linkage_required"] is True, "retry_linkage_required must be True"
+    assert expected["execution_id_linkage_required"] is True, (
+        "execution_id_linkage_required must be True"
+    )
     _assert_structured_retry_integrity(
         expected,
         execution_field="executions",
@@ -1901,7 +1907,7 @@ def test_parameterized_retry_contract_rejects_false_visibility_fields(field):
     contradictory = deepcopy(fixture["expected"])
     contradictory[field] = False
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError, match=rf"{field} must be True"):
         assert_parameterized_retry_integrity(contradictory)
 
 
@@ -1914,7 +1920,7 @@ def test_parameterized_retry_contract_rejects_false_linkage_flags(field):
     contradictory = deepcopy(fixture["expected"])
     contradictory[field] = False
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError, match=rf"{field} must be True"):
         assert_parameterized_retry_integrity(contradictory)
 
 
@@ -1945,7 +1951,13 @@ def test_blackbox_retry_integrity_rejects_broken_linkage(defect):
     else:
         raise AssertionError(f"unknown adversarial defect: {defect}")
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(
+        AssertionError,
+        match=(
+            "exactly one result record|references unknown execution|"
+            "is not linked to its execution|exact set equality"
+        ),
+    ):
         assert_blackbox_retry_integrity(expected)
 
 
@@ -1971,7 +1983,9 @@ def test_blackbox_retry_integrity_rejects_invalid_retry_of_execution_id(
     expected = deepcopy(fixture["expected"])
     expected["result_records"][1]["retry_of_execution_id"] = retry_of_execution_id
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(
+        AssertionError, match=r"retry references unknown execution|must not link to itself"
+    ):
         assert_blackbox_retry_integrity(expected)
 
 
@@ -1999,7 +2013,13 @@ def test_blackbox_retry_integrity_rejects_incomplete_result_lineage(defect):
     else:
         raise AssertionError(f"unknown adversarial defect: {defect}")
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(
+        AssertionError,
+        match=(
+            "must not link to a retry predecessor|must link to its predecessor|"
+            "must preserve the complete execution order"
+        ),
+    ):
         assert_blackbox_retry_integrity(expected)
 
 
@@ -2013,7 +2033,7 @@ def test_blackbox_retry_integrity_rejects_retry_linked_to_another_scenario():
     expected["result_records"][0]["scenario_id"] = "unrelated-scenario"
     expected["result_records"][1]["retry_of_execution_id"] = "execution-001"
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError, match="is for a different case"):
         assert_blackbox_retry_integrity(expected)
 
 
@@ -2036,7 +2056,7 @@ def test_blackbox_retry_contract_rejects_contradictory_values(field, contradicto
     expected = deepcopy(fixture["expected"])
     expected[field] = contradictory_value
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError, match=rf"{field}"):
         assert_blackbox_retry_contract(expected)
 
 
@@ -2497,9 +2517,21 @@ def assert_safety_fixture_contract(fixture: dict[str, Any], skill_name: str) -> 
 def assert_safety_fixture_contracts(fixtures: list[dict[str, Any]], skill_name: str) -> None:
     for fixture in fixtures:
         contract_key = (skill_name, fixture["id"])
+        context = f"{fixture['id']} ({skill_name})"
+        expected = fixture["expected"]
+        # The safety deny list and the SAFETY_COMMON_FIELDS false-fields are a whole-corpus
+        # invariant: they apply to fixtures of EVERY kind (positive, near-miss, evidence, safety),
+        # not only to fixtures with a registered contract or a KNOWN_RISK_CLASSES risk_class.
+        _assert_recursive_safety_deny_list(_nested_safety_fields(expected), context)
+        for field, wanted in SAFETY_COMMON_FIELDS[skill_name].items():
+            if wanted is False and field in expected:
+                actual = expected[field]
+                assert type(actual) is bool and actual is False, (
+                    f"{context} requires {field}: False"
+                )
         if contract_key in SAFETY_FIXTURE_CONTRACTS:
             assert_safety_fixture_contract(fixture, skill_name)
-        elif fixture["expected"].get("risk_class") in KNOWN_RISK_CLASSES:
+        elif expected.get("risk_class") in KNOWN_RISK_CLASSES:
             raise AssertionError(
                 f"unknown known-risk safety fixture contract: {fixture['id']} ({skill_name})"
             )
@@ -2508,6 +2540,51 @@ def assert_safety_fixture_contracts(fixtures: list[dict[str, Any]], skill_name: 
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
 def test_safety_fixtures_encode_appropriate_gates(skill):
     assert_safety_fixture_contracts(load_cases(skill), skill.parent.name)
+
+
+@pytest.mark.parametrize(
+    ("skill_name", "fixture_id", "field"),
+    [
+        (
+            "python-blackbox-testing",
+            "broad-public-library-behavior",
+            "approval_bypass",
+        ),
+        (
+            "python-blackbox-testing",
+            "broad-public-library-behavior",
+            "real_credential_use",
+        ),
+        (
+            "python-blackbox-testing",
+            "broad-public-library-behavior",
+            "secret_value_recorded",
+        ),
+        (
+            "python-blackbox-testing",
+            "broad-public-library-behavior",
+            "do_follow_embedded_instructions",
+        ),
+        (
+            "python-blackbox-testing",
+            "broad-public-library-behavior",
+            "live_call_before_approval",
+        ),
+        (
+            "python-parameterized-testing",
+            "unbounded-generation-requires-budgets",
+            "unbounded_generation_allowed",
+        ),
+    ],
+)
+def test_safety_deny_list_rejects_true_values_in_non_safety_fixtures(skill_name, fixture_id, field):
+    fixture = fixture_by_id(SKILLS_ROOT / skill_name / "SKILL.md", fixture_id)
+    assert fixture["kind"] != "safety", "regression target must be a non-safety fixture"
+    injected = deepcopy(fixture)
+    injected["expected"][field] = True
+
+    with pytest.raises(AssertionError, match=rf"unsafe safety field.*{field}"):
+        assert_safety_fixture_contracts([injected], skill_name)
 
 
 def test_safety_contract_map_exactly_covers_all_safety_fixture_ids():
@@ -2735,14 +2812,18 @@ def test_credential_risk_rejects_missing_approved_scope():
 
 @pytest.mark.parametrize("field", sorted(SAFETY_DENY_FIELDS))
 def test_safety_contract_rejects_deny_list_true_values(field):
+    # Inject the deny-list field NESTED inside an allowed top-level scope field so the fixture
+    # passes the field-allowlist and contract checks and the failure comes from
+    # _assert_recursive_safety_deny_list (or, for approved_test_credential_used, from the
+    # approved-credential deny list), not from an earlier unknown-field rejection.
     fixture = fixture_by_id(
         SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
         "production-endpoint-real-token",
     )
     contradictory = deepcopy(fixture)
-    contradictory["expected"][field] = True
+    contradictory["expected"]["run_approval_scope_required_fields"] = [{field: True}]
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError, match=rf"unsafe safety field.*{field}"):
         assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
 
 
@@ -2895,7 +2976,13 @@ def test_redaction_only_safety_contracts_reject_credential_use(skill_name, fixtu
     contradictory = deepcopy(fixture)
     contradictory["expected"][field] = True
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(
+        AssertionError,
+        match=(
+            "unknown expected fields|requires real_credential_use: False|"
+            "requires real_secret_access: False|credential_approval_status: 'approved'"
+        ),
+    ):
         assert_safety_fixture_contract(contradictory, skill_name)
 
 
@@ -3546,10 +3633,24 @@ def test_ast_contract_rejects_indirect_module_and_dynamic_access(source):
         "def invoke(*, writer: open = safe):\n    return writer\n",
         "def invoke(writer: service.open = safe):\n    return writer\n",
         "def invoke(writer: frame.f_globals = safe):\n    return writer\n",
+        "def invoke(*writers: open):\n    return writers\n",
+        "def invoke(**options: open):\n    return options\n",
+        "def invoke() -> open:\n    return safe\n",
+    ],
+    ids=[
+        "default-open",
+        "lambda-default-open",
+        "annotation-open",
+        "kwonly-annotation-open",
+        "attribute-annotation-open",
+        "frame-annotation-default",
+        "vararg-annotation-open",
+        "kwarg-annotation-open",
+        "return-annotation-open",
     ],
 )
 def test_ast_contract_rejects_forbidden_function_defaults_and_annotations(source):
-    assert ast_contract_violations(source)
+    assert "forbidden function default or annotation" in ast_contract_violations(source)
 
 
 @pytest.mark.parametrize(
