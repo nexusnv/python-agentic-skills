@@ -51,6 +51,7 @@ private paths, authorization headers, or raw unbounded sensitive output.
 - Unsupported-witness count:
 - Discarded-case count and reasons:
 - Truncated: yes / no
+- Truncated count:
 - Truncation reason, budget, and coverage impact:
 - Cases or families not run:
 

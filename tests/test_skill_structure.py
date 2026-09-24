@@ -79,6 +79,28 @@ def _parse_quoted_scalar(path: Path, key: str, value: str) -> str:
     return "".join(parsed)
 
 
+def _validate_yaml_characters(path: Path, text: str) -> None:
+    for offset, character in enumerate(text):
+        codepoint = ord(character)
+        if (
+            codepoint in {0x09, 0x0A, 0x0D}
+            or 0x20 <= codepoint <= 0x7E
+            or codepoint == 0x85
+            or 0xA0 <= codepoint <= 0xD7FF
+            or 0xE000 <= codepoint <= 0xFFFD
+            or 0x10000 <= codepoint <= 0x10FFFF
+        ):
+            continue
+        line_index = text.count("\n", 0, offset) + 1
+        line_start = text.rfind("\n", 0, offset) + 1
+        column_index = offset - line_start + 1
+        raise _frontmatter_error(
+            path,
+            f"contains forbidden control character U+{codepoint:04X} "
+            f"at line {line_index}, column {column_index}",
+        )
+
+
 def _parse_scalar(path: Path, key: str, raw_value: str) -> str:
     value = raw_value.strip()
     if not value:
@@ -101,19 +123,56 @@ def _parse_scalar(path: Path, key: str, raw_value: str) -> str:
 
 
 def _parse_folded_scalar(path: Path, key: str, lines: list[str], index: int) -> tuple[str, int]:
-    folded_lines: list[str] = []
+    content_indent: int | None = None
+    for candidate in lines[index:]:
+        if not candidate.strip():
+            continue
+        candidate_indent = len(candidate) - len(candidate.lstrip(" "))
+        if candidate_indent == 0:
+            break
+        content_indent = candidate_indent
+        break
+
+    if content_indent is None:
+        raise _frontmatter_error(path, f"{key} folded scalar must contain an indented value")
+
+    content_lines: list[str] = []
     while index < len(lines):
         line = lines[index]
-        if line and not line[0].isspace():
-            break
-        if line and "\t" in line:
+        if not line.strip():
+            content_lines.append("")
+            index += 1
+            continue
+        if "\t" in line:
             raise _frontmatter_error(path, f"{key} folded scalar uses a tab")
-        folded_lines.append(line.strip())
+        indentation = len(line) - len(line.lstrip(" "))
+        if indentation < content_indent:
+            break
+        if indentation > content_indent:
+            raise _frontmatter_error(
+                path,
+                f"{key} folded scalar has an unsupported more-indented continuation line",
+            )
+        content_lines.append(line[content_indent:])
         index += 1
 
-    if not folded_lines or not any(folded_lines):
+    rendered_lines: list[str] = []
+    pending_newlines = 0
+    for line in content_lines:
+        if not line:
+            pending_newlines += 1
+            continue
+        if not rendered_lines:
+            rendered_lines.append("\n" * pending_newlines + line)
+        else:
+            separator = " " if pending_newlines == 0 else "\n" * pending_newlines
+            rendered_lines.append(separator + line)
+        pending_newlines = 0
+
+    value = "".join(rendered_lines)
+    if not value.strip():
         raise _frontmatter_error(path, f"{key} folded scalar must contain a value")
-    return " ".join(folded_lines), index
+    return value, index
 
 
 def _parse_metadata(path: Path, lines: list[str], index: int) -> tuple[dict[str, str], int]:
@@ -151,7 +210,9 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
     malformed file gets a direct, actionable error instead of silently relying
     on a development-only YAML dependency.
     """
-    lines = path.read_text(encoding="utf-8").splitlines()
+    text = path.read_text(encoding="utf-8")
+    _validate_yaml_characters(path, text)
+    lines = text.splitlines()
     if not lines or lines[0] != "---":
         raise _frontmatter_error(path, "must start with a frontmatter fence")
 
@@ -294,6 +355,51 @@ def test_frontmatter_parser_rejects_invalid_plain_scalar_syntax(tmp_path):
     )
 
     with pytest.raises(AssertionError, match="malformed frontmatter:.*invalid plain scalar syntax"):
+        parse_frontmatter(skill)
+
+
+@pytest.mark.parametrize("control_character", ["\x00", "\x01", "\x0b", "\x7f", "\x9f"])
+def test_frontmatter_parser_rejects_yaml_forbidden_control_characters(tmp_path, control_character):
+    skill = tmp_path / "SKILL.md"
+    skill.write_text(
+        "---\nname: example\n"
+        f"description: Use when testing{control_character}\n"
+        "license: MIT\n---\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError, match="malformed frontmatter:.*forbidden control character"):
+        parse_frontmatter(skill)
+
+
+def test_frontmatter_parser_folds_folded_scalar_lines_and_preserves_blank_line(tmp_path):
+    skill = tmp_path / "SKILL.md"
+    skill.write_text(
+        "---\nname: example\n"
+        "description: >-\n"
+        "  first line\n"
+        "  second line\n"
+        "\n"
+        "  third line\n"
+        "license: MIT\n---\n",
+        encoding="utf-8",
+    )
+
+    assert parse_frontmatter(skill)["description"] == "first line second line\nthird line"
+
+
+def test_frontmatter_parser_rejects_more_indented_folded_scalar_lines(tmp_path):
+    skill = tmp_path / "SKILL.md"
+    skill.write_text(
+        "---\nname: example\n"
+        "description: >-\n"
+        "  first line\n"
+        "    unsupported more-indented line\n"
+        "license: MIT\n---\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError, match="malformed frontmatter:.*more-indented"):
         parse_frontmatter(skill)
 
 
