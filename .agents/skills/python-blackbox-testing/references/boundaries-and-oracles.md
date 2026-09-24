@@ -100,6 +100,8 @@ stable across retries, and assign a unique `execution_id` to each command run. I
 | Input class | Valid, invalid, boundary, stateful, negative, or another explicit behavioral family. |
 | Preconditions | Synthetic state, setup, environment mode, isolation, and authorization assumptions. |
 | Invocation | Public boundary and concrete consumer action. |
+| Properties/invariants | Named properties or `N/A — example-only — reason` for pure fixed-example behavior. |
+| Coverage areas/plan | Input families, boundaries, state transitions, and exclusions planned for this scenario. |
 | Expected result | Named observable success outcome and oracle source. |
 | Expected failure / not-applicable reason | Stable rejection outcome, or `not applicable` with a reason. |
 | Expected side effects | Observable state/files/events that must change or remain unchanged. |
@@ -108,6 +110,8 @@ stable across retries, and assign a unique `execution_id` to each command run. I
 | `isolation_scope_verification` | Exact verification method and result, including why `local-unisolated` applies when relevant. |
 | `approval_status` | `not-required`, `approved`, or `blocked`. |
 | `approval_scope` | Target/method/data/volume/time limits and paid-call budget, or destructive target/maximum resources/rollback/cleanup/permission. |
+| `Credential approval status` | `not-required`, `approved`, or `blocked`; using any test credential is a separate gate. |
+| `Credential approval scope` | Target/method/synthetic-data/volume/rate/time limits for the credential; never the credential value. |
 | Safety status | Default-safe local isolation; approved side effect; verified external sandbox; manual/not-run gate; or unconditional refusal. |
 | `result_status` | Pass, fail, skip, expected-failure, or not-run linked to the execution. |
 

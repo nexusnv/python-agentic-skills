@@ -1,8 +1,10 @@
 # Evidence report template
 
-Use this template before execution and complete it after the final run. Copy it into the target
-repository's established report location, or into `test-reports/<descriptive-name>.md` when no
-convention exists. Keep raw logs, secrets, real data, and unbounded output outside the report.
+Use this mandatory template before execution and complete it after the final run. Copy it into the
+target repository's established report location, or into `test-reports/<descriptive-name>.md` when no
+convention exists. A user scope change cannot remove the report artifact; explicitly authorized
+safety redaction may remove sensitive values only. Keep raw logs, secrets, real data, and unbounded
+output outside the report.
 
 ```markdown
 # Black-box evidence report
@@ -12,6 +14,8 @@ convention exists. Keep raw logs, secrets, real data, and unbounded output outsi
 - Boundary:
 - Consumer:
 - Target behavior and requested focus:
+- Properties/invariants: named properties or `N/A — example-only — reason`
+- Coverage areas/plan: input families, boundaries, state transitions, and exclusions
 - Broad coverage or focused coverage: broad / focused
 - Surfaces or cases outside the focus:
 - Safety constraints:
@@ -27,6 +31,8 @@ convention exists. Keep raw logs, secrets, real data, and unbounded output outsi
 - Isolation/scope verification (exact method and result):
 - Approval status: not-required / approved / blocked
 - Approval scope (target/method/data/volume/time limits; budget when paid):
+- Credential approval status: not-required / approved / blocked
+- Credential approval scope (target/method/synthetic-data/volume/rate/time limits):
 - Destructive scope (target/maximum affected resources/rollback/cleanup/permission; budget not applicable):
 - Controlled environment, clock, locale, timezone, and identifiers:
 - Optional tools unavailable:
@@ -34,9 +40,9 @@ convention exists. Keep raw logs, secrets, real data, and unbounded output outsi
 
 ## Scenario matrix
 
-| scenario_id | execution_id | Traceability | Label | Input class | Preconditions | Invocation | Expected result | Expected failure / not-applicable reason | Expected side effects | Cleanup | environment_mode | isolation_scope_verification | approval_status | approval_scope | Safety status | result_status |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-|  | execution ID or N/A for blocked/not-run |  |  |  |  |  |  |  |  |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | default-safe / approved side effect / verified sandbox / blocked-not-run / refusal | pass / fail / skip / expected-failure / not-run |
+| scenario_id | execution_id | Traceability | Label | Input class | Preconditions | Invocation | Properties/invariants | Coverage areas/plan | Expected result | Expected failure / not-applicable reason | Expected side effects | Cleanup | environment_mode | isolation_scope_verification | approval_status | approval_scope | Credential approval status | Credential approval scope | Safety status | result_status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+|  | execution ID or N/A for blocked/not-run |  |  |  |  |  | named properties or N/A — example-only — reason | input families, boundaries, state transitions, exclusions |  |  |  |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/method/synthetic-data/volume/rate/time limits | default-safe / approved side effect / verified sandbox / blocked-not-run / refusal | pass / fail / skip / expected-failure / not-run |
 
 ## Oracles and normalization
 
@@ -49,20 +55,21 @@ volatile.
 
 ## Exact executions
 
-| execution_id | scenario_ids | Environment mode | Isolation/scope verification | Approval status | Approval scope | Exact command | Exit status | Runner | Environment fingerprint | Result state | Relevant bounded excerpt |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| execution-001 | scenario-id-001 | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable |  |  |  |  | pass / fail / skip / expected-failure / not-run |  |
+| execution_id | scenario_ids | Environment mode | Isolation/scope verification | Approval status | Approval scope | Credential approval status | Credential approval scope | Exact command | Exit status | Runner | Environment fingerprint | Result state | Relevant bounded excerpt |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| execution-001 | scenario-id-001 | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/method/synthetic-data/volume/rate/time limits |  |  |  |  | pass / fail / skip / expected-failure |  |
 
-Keep `scenario_id` stable across retries and assign a new `execution_id` to every executed command.
-Every executed result references both IDs so commands, exit statuses, and retries remain
-unambiguous. A blocked or not-run result uses `scenario_id`, `execution_id: N/A`, a reason, and no
-exact command or exit status.
+Only executed rows belong in `Exact executions`; every row has a real execution ID and an executed
+result state. Keep `scenario_id` stable across retries and assign a new `execution_id` to every
+executed command. Every executed result references both IDs so commands, exit statuses, and retries
+remain unambiguous. A blocked or not-run result belongs only in `Not run` and uses
+`scenario_id`, `execution_id: N/A`, a reason, and no exact command or exit status.
 
 ## Results
 
-| execution_id | scenario_id | Environment mode | Isolation/scope verification | Approval status | Approval scope | Result status | Oracle outcome | Observed outcome | Retry of execution_id | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-|  |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | pass / fail / skip / expected-failure / not-run |  |  |  |  |
+| execution_id | scenario_id | Properties/invariants | Coverage areas/plan | Environment mode | Isolation/scope verification | Approval status | Approval scope | Credential approval status | Credential approval scope | Result status | Oracle outcome | Observed outcome | Retry of execution_id | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+|  |  | named properties or N/A — example-only — reason | input families, boundaries, state transitions, exclusions | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/method/synthetic-data/volume/rate/time limits | pass / fail / skip / expected-failure / not-run |  |  |  |  |
 
 Executed rows use their exact `execution_id`; blocked/not-run rows use `N/A`, explain the reason,
 and have no linked command or exit status.

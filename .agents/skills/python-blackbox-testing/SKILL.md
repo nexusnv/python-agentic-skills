@@ -1,11 +1,13 @@
 ---
 name: python-blackbox-testing
 description: >-
-  Use when a user asks for black-box, contract, characterization, regression,
-  public-boundary, API, CLI, service, integration, or behavior-focused testing
-  in a Python project where observable public behavior is the subject. Do not
-  activate solely for private helpers or internal call order when a public seam
-  exists; redirect the request to the public behavior instead.
+  Discover, characterize, specify, and protect Python behavior through public
+  interfaces such as APIs, CLIs, services, events, files, databases, and user
+  workflows. Use when a user asks for black-box testing, contract testing,
+  characterization tests, regression coverage, public-boundary tests, or
+  behavior-focused verification across a Python project. Do not replace a
+  public-boundary test with private implementation assertions when a public
+  contract exists.
 license: MIT
 compatibility: >-
   Python project-agnostic; uses existing project test tools and does not require
@@ -52,7 +54,8 @@ product-code fix.
 - For every approval, record target/method, synthetic-data scope, volume/rate/time limits, and a
   monetary budget for paid calls. An approved least-privilege synthetic test credential is not a
   real user/production credential; use it only through an approved mechanism and never record its
-  value.
+  value. Treat credential use as a separate approval gate with its own target/method/data and
+  volume/rate/time scope, recorded as `Credential approval status` and `Credential approval scope`.
 - Keep destructive actions blocked until explicit permission names the exact target, maximum
   affected records or resources, and rollback, cleanup, and post-action verification constraints.
   Do not require a monetary budget for ordinary cleanup. Approval for a live, paid, or destructive
@@ -65,6 +68,9 @@ product-code fix.
   synthetic.
 - Do not modify product code unless the user separately requests that change. Diagnose and
   minimize failures, propose a fix, and ask before implementation changes.
+- Always record a concise evidence report, even when the user narrows test scope or asks not to
+  create one. Explain that the report artifact remains mandatory. Explicitly authorized safety
+  redaction may remove sensitive values from the report, but never removes the report itself.
 - Do not claim a skipped, expected-failure, unavailable, or not-run check passed. A command exit
   status is evidence that the command ran, not proof of product correctness.
 
@@ -99,15 +105,18 @@ product-code fix.
    An `external-sandbox-verified` run may proceed only with recorded verification and no other
    gate. Unconditionally refuse real secrets, customer data, and production data. Approval scope
    must name target/method, data, volume/rate/time limits, and a paid-call budget. Destructive scope
-   instead names the target, maximum affected resources, rollback/cleanup, and permission. Never
-   record a test credential value. Honor repository prohibitions over approval.
+   instead names the target, maximum affected resources, rollback/cleanup, and permission. Record
+   `Credential approval status` and `Credential approval scope` separately for any test credential;
+   never record a test credential value. Honor repository prohibitions over approval.
 7. **Implement project-native tests.** Reuse fixtures, factories, markers, parameter tables, and
    assertion helpers. Keep tests at the public seam. Do not add a new dependency or runner unless
    the user requests it and the target repository's constraints permit it.
 8. **Execute and record evidence.** Keep each `scenario_id` stable and assign a unique
-   `execution_id` to every executed command or retry. Every executed result records both IDs,
-   runner, environment fingerprint, exact command, and exit status. For a blocked or `not-run`
-   result, record `scenario_id`, `execution_id: N/A`, the reason, and no command or exit status.
+   `execution_id` to every executed command or retry. Execute the exact configured project-native
+   test command from the intended working directory, then record its command and exit status.
+   Every executed result records both IDs, runner, environment fingerprint, exact command, and exit
+   status. For a blocked or `not-run` result, record `scenario_id`, `execution_id: N/A`, the reason,
+   and no command or exit status.
    Record other result states as `pass`, `fail`, `skip`, or `expected-failure`. Load
    `references/evidence-report.md` before the first run and again before finishing the report.
 9. **Diagnose and minimize failures.** Reduce the reproducer while preserving the failure, replay
@@ -160,12 +169,15 @@ rollback/cleanup, and permission rather than a monetary budget. Record blocked/n
 
 ## Output contract
 
-Produce both artifacts unless the user explicitly changes scope:
+Always produce both artifacts, even when the user narrows test scope or asks to skip the report. Explain
+that the report artifact is mandatory. Explicitly authorized safety redaction may remove sensitive
+values from the report, but it does not remove the report itself:
 
 1. **Project-native tests** containing retained scenarios or regressions with clear names,
    traceability to the public contract, isolated setup/teardown, and the named oracle.
 2. **A concise evidence report** containing the boundary, consumer, runner, environment mode,
-   isolation/scope verification, approval status and scope, environment fingerprint, relevant tool
+   isolation/scope verification, run approval status and scope, credential approval status and
+   scope, properties/invariants, coverage areas/plan, environment fingerprint, relevant tool
    versions, seed or a reason it is not applicable, stable scenario IDs, unique execution IDs for
    executed commands, and `execution_id: N/A` plus reasons for blocked/not-run scenarios with no
    command or exit status. Include linked execution/result records, labels, oracle and

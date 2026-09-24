@@ -41,10 +41,12 @@ recorded verification succeeds and the user request raises no separate live, pai
 other gate.
 
 Approval scope must identify the target and method, synthetic-data scope, and volume, rate, and time
-limits; a paid call also requires a monetary budget. An approved least-privilege synthetic test
-credential is not a real user/production credential. Supply it only through an approved mechanism
-and never record its value. Approval never authorizes secrets, customer data, or production data
-and cannot override repository prohibitions.
+limits; a paid call also requires a monetary budget. Using any test credential is a separate
+credential-approval gate with its own target/method/synthetic-data/volume/rate/time scope; record
+its status and scope separately. An approved least-privilege synthetic test credential is not a real
+user/production credential. Supply it only through an approved mechanism and never record its value.
+Approval never authorizes secrets, customer data, or production data and cannot override repository
+prohibitions.
 
 Keep destructive actions blocked until explicit permission identifies the exact target, maximum
 affected records or resources, and rollback, cleanup, and post-action verification constraints.
