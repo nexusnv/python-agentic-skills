@@ -375,7 +375,8 @@ def _normalize_reference_label(label: str) -> str:
 
 def _reference_definitions(markdown: str) -> dict[str, str]:
     definitions: dict[str, str] = {}
-    for match in MARKDOWN_REFERENCE_DEFINITION.finditer(markdown):
+    code_free_markdown = _markdown_without_code(markdown)
+    for match in MARKDOWN_REFERENCE_DEFINITION.finditer(code_free_markdown):
         label = _normalize_reference_label(match.group(1))
         target = match.group(2) or match.group(3)
         definitions.setdefault(label, target.strip())
@@ -414,8 +415,17 @@ def _markdown_code_ranges(markdown: str) -> list[tuple[int, int]]:
     return sorted(ranges)
 
 
-def _is_markdown_code(markdown: str, position: int, code_ranges: list[tuple[int, int]]) -> bool:
-    return any(start <= position < end for start, end in code_ranges)
+def _markdown_without_code(markdown: str) -> str:
+    ranges = _markdown_code_ranges(markdown)
+    if not ranges:
+        return markdown
+
+    code_free = list(markdown)
+    for start, end in ranges:
+        code_free[start:end] = [
+            "\n" if character == "\n" else " " for character in markdown[start:end]
+        ]
+    return "".join(code_free)
 
 
 def _is_standalone_shortcut_reference(markdown: str, start: int, end: int) -> bool:
@@ -432,14 +442,12 @@ def _is_heading_label(markdown: str, start: int) -> bool:
 
 
 def unresolved_markdown_references(markdown: str) -> Iterator[str]:
-    definitions = _reference_definitions(markdown)
-    code_ranges = _markdown_code_ranges(markdown)
-    for match in MARKDOWN_REFERENCE_USAGE.finditer(markdown):
-        if _is_markdown_code(markdown, match.start(), code_ranges):
+    code_free_markdown = _markdown_without_code(markdown)
+    definitions = _reference_definitions(code_free_markdown)
+    for match in MARKDOWN_REFERENCE_USAGE.finditer(code_free_markdown):
+        if _is_heading_label(code_free_markdown, match.start()):
             continue
-        if _is_heading_label(markdown, match.start()):
-            continue
-        if markdown[match.end() :].lstrip().startswith(":"):
+        if code_free_markdown[match.end() :].lstrip().startswith(":"):
             continue
 
         link_text = match.group(1).strip()
@@ -450,7 +458,9 @@ def unresolved_markdown_references(markdown: str) -> Iterator[str]:
         if explicit_label is not None:
             is_reference = True
         else:
-            is_reference = _is_standalone_shortcut_reference(markdown, match.start(), match.end())
+            is_reference = _is_standalone_shortcut_reference(
+                code_free_markdown, match.start(), match.end()
+            )
         if not label:
             continue
         if is_reference and _normalize_reference_label(label) not in definitions:
@@ -458,17 +468,15 @@ def unresolved_markdown_references(markdown: str) -> Iterator[str]:
 
 
 def markdown_targets(markdown: str) -> Iterator[str]:
-    for match in MARKDOWN_LINK.finditer(markdown):
+    code_free_markdown = _markdown_without_code(markdown)
+    for match in MARKDOWN_LINK.finditer(code_free_markdown):
         yield match.group(1) or match.group(2)
 
-    definitions = _reference_definitions(markdown)
-    code_ranges = _markdown_code_ranges(markdown)
-    for match in MARKDOWN_REFERENCE_USAGE.finditer(markdown):
-        if _is_markdown_code(markdown, match.start(), code_ranges):
+    definitions = _reference_definitions(code_free_markdown)
+    for match in MARKDOWN_REFERENCE_USAGE.finditer(code_free_markdown):
+        if _is_heading_label(code_free_markdown, match.start()):
             continue
-        if _is_heading_label(markdown, match.start()):
-            continue
-        if markdown[match.end() :].lstrip().startswith(":"):
+        if code_free_markdown[match.end() :].lstrip().startswith(":"):
             continue
 
         link_text = match.group(1).strip()
@@ -998,6 +1006,22 @@ ordinary [bracket text] in prose
         "references/shortcut.md",
     ]
     assert list(unresolved_markdown_references(markdown)) == []
+
+
+def test_markdown_targets_remove_fences_and_inline_code_before_extracting_links():
+    markdown = """
+[valid](references/valid.md)
+[missing reference][definition-in-fence]
+
+```markdown
+[missing fenced link](references/missing.md)
+[definition-in-fence]: references/definition.md
+`[missing inline link](references/missing-inline.md)`
+```
+"""
+
+    assert list(markdown_targets(markdown)) == ["references/valid.md"]
+    assert list(unresolved_markdown_references(markdown)) == ["definition-in-fence"]
 
 
 def test_unresolved_reference_label_is_not_resolved_as_a_sibling_file(tmp_path):

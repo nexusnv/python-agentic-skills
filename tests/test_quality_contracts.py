@@ -188,7 +188,7 @@ TEMPLATE_TABLE_REQUIREMENTS = {
                 "environment fingerprint",
                 "relevant bounded excerpt",
             ),
-            (),
+            {},
         ),
         (
             "Results",
@@ -201,7 +201,7 @@ TEMPLATE_TABLE_REQUIREMENTS = {
                 "retry of execution id",
                 "notes",
             ),
-            ("pass / fail / skip / expected-failure",),
+            {"result state": ("pass / fail / skip / expected-failure",)},
         ),
         (
             "Not run",
@@ -217,7 +217,7 @@ TEMPLATE_TABLE_REQUIREMENTS = {
                 "credential approval scope",
                 "coverage impact",
             ),
-            ("not-run",),
+            {"result state": ("not-run",)},
         ),
     ),
     "python-parameterized-testing": (
@@ -248,7 +248,7 @@ TEMPLATE_TABLE_REQUIREMENTS = {
                 "retry of",
                 "notes",
             ),
-            ("pass / fail / skip / expected-failure",),
+            {"result state": ("pass / fail / skip / expected-failure",)},
         ),
         (
             "Not run and skips",
@@ -260,7 +260,7 @@ TEMPLATE_TABLE_REQUIREMENTS = {
                 "exit status",
                 "coverage impact",
             ),
-            ("not-run",),
+            {"result state": ("not-run",)},
         ),
     ),
 }
@@ -338,7 +338,7 @@ PARAMETERIZED_FIXTURE_CONTRACT_LANGUAGE = {
 class ReportTableContract:
     section_name: str
     headers: tuple[str, ...]
-    body_markers: tuple[str, ...] = ()
+    body_markers: dict[str, tuple[str, ...]]
 
 
 @dataclass(frozen=True)
@@ -1223,13 +1223,20 @@ def _assert_table_requirements(
     )
 
     if required_body_markers:
-        body = "\n".join(
-            "|".join(row) for table in matching_tables for row in table.body
-        ).casefold()
-        for marker in required_body_markers:
-            assert marker.casefold() in body, (
-                f"{template_path} lacks canonical {section_name} table body field: {marker}"
+        for column, markers in required_body_markers.items():
+            normalized_column = _normalized_table_header(column)
+            assert normalized_column in expected_headers, (
+                f"{template_path} lacks canonical {section_name} body column: {column}"
             )
+            column_index = expected_headers.index(normalized_column)
+            body_cells = [
+                row[column_index].casefold() for table in matching_tables for row in table.body
+            ]
+            for marker in markers:
+                assert any(marker.casefold() in cell for cell in body_cells), (
+                    f"{template_path} lacks canonical {section_name} {column} column field: "
+                    f"{marker}"
+                )
 
 
 def assert_report_template_contains(skill_name: str, template_path: Path | None = None) -> None:
@@ -1359,6 +1366,7 @@ def test_eval_fixture_shape(skill):
 
         expected = fixture["expected"]
         assert isinstance(expected, dict), f"{context} expected must be a mapping"
+        assert_fixture_expected_value_shapes(fixture, skill.parent.name)
         properties = expected.get("properties_invariants")
         assert isinstance(properties, str) and properties.strip(), (
             f"{context} lacks properties/invariants"
@@ -1458,6 +1466,19 @@ def test_table_requirements_match_normalized_header_names_exactly(tmp_path):
     copy.write_text(content.replace(original_header, adversarial_header, 1), encoding="utf-8")
 
     with pytest.raises(AssertionError, match="Exact executions table fields in exact order"):
+        assert_report_template_contains("python-blackbox-testing", copy)
+
+
+def test_result_state_body_marker_must_be_in_result_state_column(tmp_path):
+    report = SKILLS_ROOT / "python-blackbox-testing" / "references" / "evidence-report.md"
+    content = report.read_text(encoding="utf-8")
+    original_row = "|  |  | pass / fail / skip / expected-failure |  |  |  |  |"
+    adversarial_row = "|  |  | pending |  |  |  | pass / fail / skip / expected-failure |"
+    assert original_row in content
+    copy = tmp_path / "evidence-report.md"
+    copy.write_text(content.replace(original_row, adversarial_row, 1), encoding="utf-8")
+
+    with pytest.raises(AssertionError, match="result state column"):
         assert_report_template_contains("python-blackbox-testing", copy)
 
 
@@ -1992,6 +2013,187 @@ def _nested_safety_fields(
     return entries
 
 
+EXPECTED_SCALAR_TYPES = frozenset({str, int, float, bool, type(None)})
+EXPECTED_STRUCTURED_FIELDS = frozenset(
+    {
+        "executions",
+        "execution_records",
+        "results",
+        "result_records",
+        "retry_linkage",
+        "not_run_records",
+        "not_run",
+    }
+)
+EXPECTED_LIST_FIELDS = frozenset(
+    {
+        "approval_scope_required_fields",
+        "coverage_areas_plan",
+        "fixed_examples",
+        "isolated_targets",
+        "isolation_required_before_local_isolated",
+        "observable_boundaries",
+        "open_questions",
+        "redaction_targets",
+        "required_report_fields",
+        "run_approval_scope_required_fields",
+        "verification_method",
+    }
+)
+
+
+def _is_expected_scalar(value: Any) -> bool:
+    return type(value) in EXPECTED_SCALAR_TYPES
+
+
+def _assert_scalar_or_scalar_list(value: Any, location: str, *, require_list: bool = False) -> None:
+    if isinstance(value, list):
+        assert all(_is_expected_scalar(item) for item in value), (
+            f"{location} must be a list of scalar values, not nested objects"
+        )
+    else:
+        assert not require_list, f"{location} must be a list of scalar values"
+        assert _is_expected_scalar(value), f"{location} must be a scalar or list of scalars"
+
+
+def _assert_nonempty_string(value: Any, location: str) -> None:
+    assert isinstance(value, str) and value.strip(), f"{location} must be a non-empty string"
+
+
+def _assert_case_field(record: dict[str, Any], case_field: str, location: str) -> None:
+    case_keys = [key for key in (case_field, f"{case_field}s") if key in record]
+    assert len(case_keys) == 1, f"{location} must identify exactly one case field"
+    case_value = record[case_keys[0]]
+    if case_keys[0] == f"{case_field}s":
+        assert isinstance(case_value, list) and case_value, (
+            f"{location}.{case_keys[0]} must be a non-empty list of strings"
+        )
+        assert all(isinstance(case, str) and case.strip() for case in case_value), (
+            f"{location}.{case_keys[0]} must contain only non-empty strings"
+        )
+    else:
+        _assert_nonempty_string(case_value, f"{location}.{case_keys[0]}")
+
+
+def _assert_closed_mapping(
+    value: Any,
+    *,
+    required_keys: set[str],
+    allowed_keys: set[str],
+    location: str,
+) -> dict[str, Any]:
+    assert isinstance(value, dict), f"{location} must be a mapping"
+    keys = set(value)
+    assert required_keys <= keys <= allowed_keys, (
+        f"{location} must use only its approved keys: required={sorted(required_keys)}, "
+        f"allowed={sorted(allowed_keys)}, actual={sorted(keys)}"
+    )
+    return value
+
+
+def _assert_execution_records(value: Any, *, case_field: str, location: str) -> None:
+    assert isinstance(value, list) and value, f"{location} must be a non-empty list"
+    for index, record in enumerate(value):
+        record_location = f"{location}[{index}]"
+        _assert_closed_mapping(
+            record,
+            required_keys={"execution_id", "attempt"},
+            allowed_keys={"execution_id", "attempt", case_field, f"{case_field}s"},
+            location=record_location,
+        )
+        _assert_nonempty_string(record["execution_id"], f"{record_location}.execution_id")
+        assert record["attempt"] in {"initial", "retry"}
+        _assert_case_field(record, case_field, record_location)
+
+
+def _assert_result_records(value: Any, *, case_field: str, location: str) -> None:
+    assert isinstance(value, list) and value, f"{location} must be a non-empty list"
+    allowed_keys = {case_field, "execution_id", "result_state", "retry_of_execution_id"}
+    for index, record in enumerate(value):
+        record_location = f"{location}[{index}]"
+        _assert_closed_mapping(
+            record,
+            required_keys={case_field, "execution_id", "result_state"},
+            allowed_keys=allowed_keys,
+            location=record_location,
+        )
+        _assert_nonempty_string(record[case_field], f"{record_location}.{case_field}")
+        _assert_nonempty_string(record["execution_id"], f"{record_location}.execution_id")
+        assert record["result_state"] in {"pass", "fail", "skip", "expected-failure"}
+        if "retry_of_execution_id" in record:
+            _assert_nonempty_string(
+                record["retry_of_execution_id"], f"{record_location}.retry_of_execution_id"
+            )
+
+
+def _assert_retry_linkage(value: Any, *, case_field: str, location: str) -> None:
+    linkage = _assert_closed_mapping(
+        value,
+        required_keys={case_field, "execution_ids"},
+        allowed_keys={case_field, "execution_ids"},
+        location=location,
+    )
+    _assert_nonempty_string(linkage[case_field], f"{location}.{case_field}")
+    execution_ids = linkage["execution_ids"]
+    assert isinstance(execution_ids, list) and execution_ids, (
+        f"{location}.execution_ids must be a non-empty list of strings"
+    )
+    assert all(
+        isinstance(execution_id, str) and execution_id.strip() for execution_id in execution_ids
+    )
+
+
+def _assert_not_run_records(value: Any, *, case_field: str, location: str) -> None:
+    assert isinstance(value, list) and value, f"{location} must be a non-empty list"
+    for index, record in enumerate(value):
+        record_location = f"{location}[{index}]"
+        _assert_closed_mapping(
+            record,
+            required_keys={
+                case_field,
+                "execution_id",
+                "result_state",
+                "run_approval_status",
+                "reason",
+            },
+            allowed_keys={
+                case_field,
+                "execution_id",
+                "result_state",
+                "run_approval_status",
+                "reason",
+            },
+            location=record_location,
+        )
+        _assert_nonempty_string(record[case_field], f"{record_location}.{case_field}")
+        _assert_nonempty_string(record["execution_id"], f"{record_location}.execution_id")
+        assert record["execution_id"] == "N/A"
+        assert record["result_state"] == "not-run"
+        _assert_nonempty_string(
+            record["run_approval_status"], f"{record_location}.run_approval_status"
+        )
+        _assert_nonempty_string(record["reason"], f"{record_location}.reason")
+
+
+def assert_fixture_expected_value_shapes(fixture: dict[str, Any], skill_name: str) -> None:
+    expected = fixture["expected"]
+    case_field = "scenario_id" if skill_name == "python-blackbox-testing" else "case_id"
+    for field, value in expected.items():
+        location = f"{fixture['id']}.expected.{field}"
+        if field not in EXPECTED_STRUCTURED_FIELDS:
+            _assert_scalar_or_scalar_list(
+                value, location, require_list=field in EXPECTED_LIST_FIELDS
+            )
+        elif field in {"executions", "execution_records"}:
+            _assert_execution_records(value, case_field=case_field, location=location)
+        elif field in {"results", "result_records"}:
+            _assert_result_records(value, case_field=case_field, location=location)
+        elif field == "retry_linkage":
+            _assert_retry_linkage(value, case_field=case_field, location=location)
+        else:
+            _assert_not_run_records(value, case_field=case_field, location=location)
+
+
 def _has_explicit_approved_test_credential_contract(expected: dict[str, Any]) -> bool:
     credential_scope = expected.get("credential_approval_scope")
     valid_scope = (isinstance(credential_scope, str) and credential_scope.strip()) or (
@@ -2158,6 +2360,7 @@ def assert_safety_fixture_contract(fixture: dict[str, Any], skill_name: str) -> 
         context,
         approved_credential_contract,
     )
+    assert_fixture_expected_value_shapes(fixture, skill_name)
 
     if safety_contract.redaction_only:
         for field in FORBIDDEN_REDACTION_CREDENTIAL_FIELDS:
@@ -2307,6 +2510,20 @@ def test_safety_contract_rejects_deny_list_true_values(field):
         assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
 
 
+def test_safety_contract_rejects_arbitrary_nested_object_in_scope_field():
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "production-endpoint-real-token",
+    )
+    contradictory = deepcopy(fixture)
+    contradictory["expected"]["run_approval_scope_required_fields"] = [
+        {"arbitrary_unclassified_field": True}
+    ]
+
+    with pytest.raises(AssertionError, match="scalar"):
+        assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
+
+
 def test_safety_contract_rejects_nested_approval_bypass():
     fixture = fixture_by_id(
         SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
@@ -2371,14 +2588,25 @@ def test_safety_contract_rejects_non_boolean_approved_credential_values(unsafe_v
         assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
 
 
+def test_safety_contract_rejects_nested_approved_credential_field():
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "approved-least-privilege-sandbox-credential",
+    )
+    nested = deepcopy(fixture)
+    nested["expected"]["run_approval_scope"] = [{"approved_test_credential_used": True}]
+
+    with pytest.raises(AssertionError, match="scalar"):
+        assert_safety_fixture_contract(nested, "python-blackbox-testing")
+
+
 def test_safety_contract_allows_approved_credential_only_with_explicit_contract():
     fixture = fixture_by_id(
         SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
         "approved-least-privilege-sandbox-credential",
     )
-    approved = deepcopy(fixture)
-    approved["expected"]["run_approval_scope"] = [{"approved_test_credential_used": True}]
-    assert_safety_fixture_contract(approved, "python-blackbox-testing")
+
+    assert_safety_fixture_contract(fixture, "python-blackbox-testing")
 
     missing_contract = fixture_by_id(
         SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
@@ -2689,10 +2917,25 @@ def _is_forbidden_direct_call(node: ast.Call) -> bool:
     return node.func.attr in FORBIDDEN_UNSAFE_ATTRIBUTE_NAMES
 
 
+def _ast_location_key(node: ast.AST) -> str:
+    if isinstance(node, ast.Name):
+        return f"Name({node.id})"
+    if isinstance(node, ast.Attribute):
+        return f"Attribute({_ast_location_key(node.value)}, {node.attr})"
+    if isinstance(node, ast.Subscript):
+        return (
+            f"Subscript({_ast_location_key(node.value)}, "
+            f"{ast.dump(node.slice, annotate_fields=True, include_attributes=False)})"
+        )
+    return ast.dump(node, annotate_fields=True, include_attributes=False)
+
+
 def _is_forbidden_alias_value(
     node: ast.AST,
     aliases: set[str],
     module_bindings: dict[str, tuple[str, ...]],
+    forbidden_subscripts: set[str],
+    forbidden_attributes: set[str],
 ) -> bool:
     for child in ast.walk(node):
         if isinstance(child, ast.Name) and (
@@ -2707,12 +2950,15 @@ def _is_forbidden_alias_value(
             _is_dynamic_builtin_access(child)
             or _is_dunder_attribute(child)
             or child.attr in FORBIDDEN_UNSAFE_ATTRIBUTE_NAMES
+            or _ast_location_key(child) in forbidden_attributes
         ):
             return True
         if isinstance(child, ast.Call) and _is_forbidden_direct_call(child):
             return True
         if isinstance(child, ast.Subscript) and (
-            _is_dangerous_subscript(child) or _is_forbidden_subscript_root(child, module_bindings)
+            _is_dangerous_subscript(child)
+            or _is_forbidden_subscript_root(child, module_bindings)
+            or _ast_location_key(child) in forbidden_subscripts
         ):
             return True
         if _is_sys_modules_access(child, module_bindings):
@@ -2720,44 +2966,128 @@ def _is_forbidden_alias_value(
     return False
 
 
-def _assignment_target_names(target: ast.AST) -> list[ast.Name]:
-    if isinstance(target, ast.Name):
+def _binding_targets(target: ast.AST) -> list[ast.AST]:
+    if isinstance(target, (ast.Name, ast.Attribute, ast.Subscript)):
         return [target]
+    if isinstance(target, ast.Starred):
+        return _binding_targets(target.value)
     if isinstance(target, (ast.Tuple, ast.List)):
-        return [name for element in target.elts for name in _assignment_target_names(element)]
+        return [binding for element in target.elts for binding in _binding_targets(element)]
     return []
+
+
+def _is_forbidden_call_target(
+    node: ast.AST,
+    aliases: set[str],
+    forbidden_subscripts: set[str],
+    forbidden_attributes: set[str],
+) -> bool:
+    if isinstance(node, ast.Subscript):
+        if _ast_location_key(node) in forbidden_subscripts:
+            return True
+        if _is_forbidden_alias_value(node, aliases, {}, forbidden_subscripts, forbidden_attributes):
+            return True
+        dotted_name = _dotted_name(node.value)
+        return bool(dotted_name and dotted_name[0] in aliases)
+    if isinstance(node, ast.Attribute):
+        return _ast_location_key(node) in forbidden_attributes or _is_forbidden_alias_value(
+            node.value, aliases, {}, forbidden_subscripts, forbidden_attributes
+        )
+    return False
+
+
+def _function_parameters(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+    arguments = node.args
+    return [
+        argument.arg
+        for argument in (
+            *arguments.posonlyargs,
+            *arguments.args,
+            *arguments.kwonlyargs,
+        )
+    ]
+
+
+def _call_parameter_bindings(
+    tree: ast.AST,
+) -> list[tuple[list[ast.AST], ast.AST]]:
+    function_parameters = {
+        node.name: _function_parameters(node)
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    bindings: list[tuple[list[ast.AST], ast.AST]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            continue
+        parameters = function_parameters.get(node.func.id)
+        if parameters is None:
+            continue
+        for parameter, argument in zip(parameters, node.args, strict=False):
+            bindings.append(([ast.Name(id=parameter, ctx=ast.Store())], argument))
+        for keyword in node.keywords:
+            if keyword.arg is not None and keyword.arg in parameters:
+                bindings.append(([ast.Name(id=keyword.arg, ctx=ast.Store())], keyword.value))
+    return bindings
 
 
 def _forbidden_aliases(
     tree: ast.AST, module_bindings: dict[str, tuple[str, ...]]
-) -> tuple[set[str], list[str]]:
-    assignments: list[tuple[list[ast.Name], ast.AST]] = []
+) -> tuple[set[str], set[str], set[str], list[str]]:
+    bindings: list[tuple[list[ast.AST], ast.AST]] = _call_parameter_bindings(tree)
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign):
-            targets = [name for target in node.targets for name in _assignment_target_names(target)]
-            assignments.append((targets, node.value))
+            bindings.extend((_binding_targets(target), node.value) for target in node.targets)
         elif isinstance(node, ast.AnnAssign) and node.value is not None:
-            targets = _assignment_target_names(node.target)
-            if targets:
-                assignments.append((targets, node.value))
-        elif isinstance(node, ast.NamedExpr) and isinstance(node.target, ast.Name):
-            assignments.append(([node.target], node.value))
+            bindings.append((_binding_targets(node.target), node.value))
+        elif isinstance(node, ast.NamedExpr):
+            bindings.append((_binding_targets(node.target), node.value))
+        elif isinstance(node, (ast.For, ast.AsyncFor)):
+            bindings.append((_binding_targets(node.target), node.iter))
+        elif isinstance(node, ast.comprehension):
+            bindings.append((_binding_targets(node.target), node.iter))
+        elif isinstance(node, ast.withitem) and node.optional_vars is not None:
+            bindings.append((_binding_targets(node.optional_vars), node.context_expr))
 
     aliases: set[str] = set()
     alias_targets: set[str] = set()
+    forbidden_subscripts: set[str] = set()
+    forbidden_attributes: set[str] = set()
     changed = True
     while changed:
         changed = False
-        for targets, value in assignments:
-            if not _is_forbidden_alias_value(value, aliases, module_bindings):
+        for targets, value in bindings:
+            if not _is_forbidden_alias_value(
+                value,
+                aliases,
+                module_bindings,
+                forbidden_subscripts,
+                forbidden_attributes,
+            ):
                 continue
             for target in targets:
-                if target.id not in aliases:
-                    aliases.add(target.id)
-                    alias_targets.add(target.id)
-                    changed = True
+                if isinstance(target, ast.Name):
+                    if target.id not in aliases:
+                        aliases.add(target.id)
+                        alias_targets.add(target.id)
+                        changed = True
+                elif isinstance(target, ast.Subscript):
+                    location = _ast_location_key(target)
+                    if location not in forbidden_subscripts:
+                        forbidden_subscripts.add(location)
+                        changed = True
+                elif isinstance(target, ast.Attribute):
+                    location = _ast_location_key(target)
+                    if location not in forbidden_attributes:
+                        forbidden_attributes.add(location)
+                        changed = True
 
-    return aliases, [f"forbidden alias: {target}" for target in sorted(alias_targets)]
+    return (
+        aliases,
+        forbidden_subscripts,
+        forbidden_attributes,
+        [f"forbidden alias: {target}" for target in sorted(alias_targets)],
+    )
 
 
 def ast_contract_violations(source: str) -> list[str]:
@@ -2776,7 +3106,9 @@ def ast_contract_violations(source: str) -> list[str]:
         f"non-allowlisted import: {root}"
         for root in sorted(imported_roots - ALLOWED_HELPER_IMPORTS)
     )
-    forbidden_aliases, alias_violations = _forbidden_aliases(tree, module_bindings)
+    forbidden_aliases, forbidden_subscripts, forbidden_attributes, alias_violations = (
+        _forbidden_aliases(tree, module_bindings)
+    )
     violations.extend(alias_violations)
 
     for node in ast.walk(tree):
@@ -2800,6 +3132,10 @@ def ast_contract_violations(source: str) -> list[str]:
             violations.append("forbidden dangerous subscript alias")
         if isinstance(node, ast.Name) and node.id in FORBIDDEN_DYNAMIC_NAMES:
             violations.append(f"forbidden dynamic name: {node.id}")
+        elif isinstance(node, ast.Call) and _is_forbidden_call_target(
+            node.func, forbidden_aliases, forbidden_subscripts, forbidden_attributes
+        ):
+            violations.append("forbidden aliased subscript or attribute call")
         elif isinstance(node, ast.Call) and _is_forbidden_direct_call(node):
             violations.append("forbidden direct call")
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
@@ -2856,6 +3192,14 @@ def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
         "writer = [sys.modules][0]\n",
         "writer = (frame.f_globals,)\n",
         "writer = [getattr][0]\n",
+        "writer[0] = open\nwriter[0]('secret.txt')\n",
+        "writer[0] = open\nwriter[0].custom()\n",
+        "for writer in (open, safe):\n    writer('secret.txt')\n",
+        "with open as writer:\n    writer('secret.txt')\n",
+        "def invoke(writer):\n    writer('secret.txt')\ninvoke(open)\n",
+        "writers = [open for _ in values]\nwriters[0]('secret.txt')\n",
+        "writers = [writer for writer in (open, safe)]\nwriters[0]('secret.txt')\n",
+        "[writer('secret.txt') for writer in (open, safe)]\n",
     ],
     ids=[
         "sys-modules",
@@ -2887,6 +3231,14 @@ def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
         "module-access-in-subscript-alias",
         "frame-global-in-tuple-alias",
         "dynamic-name-in-subscript-alias",
+        "subscript-target-open-alias",
+        "attribute-through-subscript-alias",
+        "loop-target-open-alias",
+        "with-target-open-alias",
+        "function-parameter-open-alias",
+        "comprehension-value-subscript-call",
+        "comprehension-target-loop-alias",
+        "comprehension-call-through-loop-alias",
     ],
 )
 def test_ast_contract_rejects_indirect_module_and_dynamic_access(source):
@@ -2903,6 +3255,12 @@ def test_ast_contract_rejects_indirect_module_and_dynamic_access(source):
     ],
 )
 def test_ast_contract_allows_non_forbidden_container_aliases(source):
+    assert ast_contract_violations(source) == []
+
+
+def test_ast_contract_allows_ordinary_read_only_subscript_access():
+    source = "values = mapping['values']\nresult = values[0]\n"
+
     assert ast_contract_violations(source) == []
 
 

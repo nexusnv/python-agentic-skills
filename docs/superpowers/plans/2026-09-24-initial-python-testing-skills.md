@@ -117,7 +117,7 @@ Do not add a build backend or runtime project metadata. The README must state th
 
 `README.md` must include:
 
-```markdown
+````markdown
 # Python Agentic Skills
 
 Open-source, agentic coding skills for Python projects.
@@ -154,10 +154,10 @@ Install globally with the CLI’s `--global` option or target a project director
 ## Research and contribution
 
 - [Research](../../research/2026-09-24-python-testing-skills-landscape.md)
-- [Contributing](../../../CONTRIBUTING.md)
-- [Security](../../../SECURITY.md)
-- [Changelog](../../../CHANGELOG.md)
-```
+- [Contributing](../../CONTRIBUTING.md)
+- [Security](../../SECURITY.md)
+- [Changelog](../../CHANGELOG.md)
+````
 
 - [ ] **Step 3: Add repository-specific agent rules**
 
