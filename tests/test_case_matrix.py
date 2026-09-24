@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).parents[1] / ".agents/skills/python-parameterized-testing/scripts/plan_case_matrix.py"
+SCRIPT = (
+    Path(__file__).parents[1]
+    / ".agents/skills/python-parameterized-testing/scripts/plan_case_matrix.py"
+)
 
 
 def run_helper(payload):
