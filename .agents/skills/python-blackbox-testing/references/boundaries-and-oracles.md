@@ -94,7 +94,7 @@ stable across retries, and assign a unique `execution_id` to each command run. I
 | Field | Required content |
 | --- | --- |
 | `scenario_id` | Stable scenario identifier reused across retries. |
-| `execution_id` | Unique identifier for one command execution; record retry lineage separately. |
+| `execution_id` | Unique identifier for one executed command; use `N/A` for blocked/not-run and record retry lineage separately. |
 | Traceability | Public interface, contract, defect, or open question. |
 | Label | Contract, characterization, regression, or suspicious current behavior. |
 | Input class | Valid, invalid, boundary, stateful, negative, or another explicit behavioral family. |

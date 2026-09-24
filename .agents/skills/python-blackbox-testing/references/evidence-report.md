@@ -34,9 +34,9 @@ convention exists. Keep raw logs, secrets, real data, and unbounded output outsi
 
 ## Scenario matrix
 
-| scenario_id | execution_id | Traceability | Label | Input class | Preconditions | Public invocation | Expected result | Expected failure / not-applicable reason | Expected side effects | Cleanup | Oracle source | Environment mode | Isolation/scope verification | Approval status | Approval scope | Result status |
+| scenario_id | execution_id | Traceability | Label | Input class | Preconditions | Invocation | Expected result | Expected failure / not-applicable reason | Expected side effects | Cleanup | environment_mode | isolation_scope_verification | approval_status | approval_scope | Safety status | result_status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-|  |  |  |  |  |  |  |  |  |  |  |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | pass / fail / skip / expected-failure / not-run |
+|  | execution ID or N/A for blocked/not-run |  |  |  |  |  |  |  |  |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | default-safe / approved side effect / verified sandbox / blocked-not-run / refusal | pass / fail / skip / expected-failure / not-run |
 
 ## Oracles and normalization
 
@@ -53,14 +53,19 @@ volatile.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | execution-001 | scenario-id-001 | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable |  |  |  |  | pass / fail / skip / expected-failure / not-run |  |
 
-Keep `scenario_id` stable across retries and assign a new `execution_id` to every command run. Every
-result must reference both IDs so commands, exit statuses, and retries remain unambiguous.
+Keep `scenario_id` stable across retries and assign a new `execution_id` to every executed command.
+Every executed result references both IDs so commands, exit statuses, and retries remain
+unambiguous. A blocked or not-run result uses `scenario_id`, `execution_id: N/A`, a reason, and no
+exact command or exit status.
 
 ## Results
 
 | execution_id | scenario_id | Environment mode | Isolation/scope verification | Approval status | Approval scope | Result status | Oracle outcome | Observed outcome | Retry of execution_id | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 |  |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | pass / fail / skip / expected-failure / not-run |  |  |  |  |
+
+Executed rows use their exact `execution_id`; blocked/not-run rows use `N/A`, explain the reason,
+and have no linked command or exit status.
 
 ## Failures and minimized reproducers
 
@@ -122,9 +127,11 @@ No minimized reproducer: state why minimization was not applicable or possible.
 
 ## Not run
 
-| Scenario or capability | Status | Reason | Missing tool, input, approval, or isolation | Coverage impact |
-| --- | --- | --- | --- | --- |
-|  | not-run |  |  |  |
+| scenario_id | execution_id | Result status | Reason | Environment mode | Approval status | Coverage impact |
+| --- | --- | --- | --- | --- | --- | --- |
+|  | N/A | not-run |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified | not-required / approved / blocked |  |
+
+Blocked and not-run rows never claim an exact command or exit status.
 
 ## Coverage gaps and limitations
 

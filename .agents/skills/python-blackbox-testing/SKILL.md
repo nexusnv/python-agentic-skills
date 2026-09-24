@@ -105,10 +105,10 @@ product-code fix.
    assertion helpers. Keep tests at the public seam. Do not add a new dependency or runner unless
    the user requests it and the target repository's constraints permit it.
 8. **Execute and record evidence.** Keep each `scenario_id` stable and assign a unique
-   `execution_id` to every command run or retry. Run the exact project-native command and record
-   execution/scenario IDs, environment mode and verification, approval status/scope, runner,
-   environment fingerprint, command, exit status, and each result as `pass`, `fail`, `skip`,
-   `expected-failure`, or `not-run`. Record bounded output only. Load
+   `execution_id` to every executed command or retry. Every executed result records both IDs,
+   runner, environment fingerprint, exact command, and exit status. For a blocked or `not-run`
+   result, record `scenario_id`, `execution_id: N/A`, the reason, and no command or exit status.
+   Record other result states as `pass`, `fail`, `skip`, or `expected-failure`. Load
    `references/evidence-report.md` before the first run and again before finishing the report.
 9. **Diagnose and minimize failures.** Reduce the reproducer while preserving the failure, replay
    exact state and inputs, and distinguish product defects, environment failures, bad oracles, and
@@ -135,7 +135,8 @@ needs no approval. Side-effectful `local-unisolated`, `external-live`, and
 `external-sandbox-verified` may proceed only with recorded verification when the user request
 otherwise permits it. Record approval scope as target/method, data, volume/rate/time limits, and
 budget when paid. For destructive work, record target, maximum affected resources,
-rollback/cleanup, and permission rather than a monetary budget.
+rollback/cleanup, and permission rather than a monetary budget. Record blocked/not-run work with
+`scenario_id`, `execution_id: N/A`, and a reason, but no command or exit status.
 
 ## Failure handling
 
@@ -165,10 +166,12 @@ Produce both artifacts unless the user explicitly changes scope:
    traceability to the public contract, isolated setup/teardown, and the named oracle.
 2. **A concise evidence report** containing the boundary, consumer, runner, environment mode,
    isolation/scope verification, approval status and scope, environment fingerprint, relevant tool
-   versions, seed or a reason it is not applicable, stable scenario IDs, unique execution IDs,
-   linked execution/result records, labels, oracle and normalization, exact commands, exit statuses,
-   result statuses, bounded failure excerpts, minimized reproducers, retained regressions, safety
-   constraints, retries, limitations, not-run work, and coverage gaps.
+   versions, seed or a reason it is not applicable, stable scenario IDs, unique execution IDs for
+   executed commands, and `execution_id: N/A` plus reasons for blocked/not-run scenarios with no
+   command or exit status. Include linked execution/result records, labels, oracle and
+   normalization, exact commands, exit statuses, result statuses, bounded failure excerpts,
+   minimized reproducers, retained regressions, safety constraints, retries, limitations, not-run
+   work, and coverage gaps.
 
 Save the report using the target repository's convention, or at `test-reports/<descriptive-name>.md`
 if no convention exists. Keep raw logs, secrets, real data, and unbounded output outside the
