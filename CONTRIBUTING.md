@@ -8,6 +8,7 @@ runner.
 
 - Git.
 - Python 3.10 or newer for the workflows and the bundled standard-library helpers.
+- Node.js 22 or newer for the skills CLI (`skills` engines floor) used by the local discovery smoke.
 - [`uv`](https://docs.astral.sh/uv/) for the repository's development-only tooling.
 
 Install the development dependencies from the repository root:
@@ -158,11 +159,13 @@ CLI version (`skills@1.7.0`, verified against the npm registry on 2026-09-24) in
 The repository targets Python 3.10 and newer. The official `skills-ref` validator currently requires
 Python 3.11 or newer, so keep that version isolated to the validator step; do not raise the Python
 floor for the repository's runtime or development dependencies. The current `skills-ref` package
-exposes the `agentskills` executable, so use this verified equivalent for each skill:
+exposes the `agentskills` executable, so use this verified equivalent for each skill. The version is
+pinned (`skills-ref==0.1.1`, the current release verified on 2026-09-24) so validator results stay
+reproducible; bump the pin deliberately and record the re-verification:
 
 ```bash
-uvx --python 3.11 --from skills-ref agentskills validate .agents/skills/python-blackbox-testing
-uvx --python 3.11 --from skills-ref agentskills validate .agents/skills/python-parameterized-testing
+uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate .agents/skills/python-blackbox-testing
+uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate .agents/skills/python-parameterized-testing
 ```
 
 Run the validator for each changed skill rather than assuming all skills were checked. Do not claim a

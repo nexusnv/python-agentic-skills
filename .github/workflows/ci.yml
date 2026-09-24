@@ -13,12 +13,18 @@ jobs:
   quality:
     name: Quality (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.10", "3.12", "3.13"]
+        # 3.10 is the requires-python floor; 3.11 runs the skills-ref validator path too.
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          # Full history so the whitespace step can diff the pushed/PR range.
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.2.0
@@ -31,32 +37,51 @@ jobs:
         run: uv sync --locked --group dev
 
       - name: Ruff lint
-        run: uv run --group dev ruff check .
+        run: uv run --locked --group dev ruff check .
 
       - name: Ruff format check
-        run: uv run --group dev ruff format --check .
+        run: uv run --locked --group dev ruff format --check .
 
       - name: Pytest
-        run: uv run --group dev pytest
+        run: uv run --locked --group dev pytest
 
+      # A bare `git diff --check` inspects only the worktree, which is clean right
+      # after checkout, so it can only pass. Inspect committed content over the
+      # pushed/PR range instead; fall back to the checked-out tip commit when the
+      # base is unusable (new branch -> all-zero `before`, or object not fetched).
       - name: Git whitespace check
-        run: git diff --check
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -n "$base" ] \
+            && [ "$base" != "0000000000000000000000000000000000000000" ] \
+            && git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "Checking committed range ${base}..HEAD"
+            git diff --check "$base" HEAD
+          else
+            echo "No usable base commit; checking tip commit HEAD only"
+            git show --check --format= HEAD
+          fi
 
       # skills-ref requires Python >=3.11, so the 3.10 matrix job must skip it.
       # uvx isolates its own 3.11 interpreter from the matrix interpreter.
       - name: Official Agent Skills validators
         if: matrix.python-version != '3.10'
         run: |
-          uvx --python 3.11 --from skills-ref agentskills validate .agents/skills/python-blackbox-testing
-          uvx --python 3.11 --from skills-ref agentskills validate .agents/skills/python-parameterized-testing
+          uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate .agents/skills/python-blackbox-testing
+          uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate .agents/skills/python-parameterized-testing
 
       - name: skills.sh.json syntax
-        run: uv run --group dev python -m json.tool skills.sh.json >/dev/null
+        run: uv run --locked --group dev python -m json.tool skills.sh.json >/dev/null
 
   skills-smoke:
     # Separate job so a skills.sh or npm outage does not mask Python test results.
     name: skills.sh discovery smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # The skills CLI reports anonymous usage data unless disabled.
+      DISABLE_TELEMETRY: "1"
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -71,6 +96,8 @@ jobs:
         with:
           path: ~/.npm
           key: npm-skills-cli-1.7.0
+          restore-keys: |
+            npm-skills-cli-
 
       - name: skills.sh discovery smoke (pinned skills CLI)
         run: |
@@ -85,8 +112,12 @@ jobs:
           # The CLI renders ANSI color/control codes; strip them before matching names.
           sed -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' "$raw" > "$plain"
           status=0
+          # Match only the skill's own listing line: the name must be the whole
+          # line after the CLI's `│    ` box-drawing indentation. A bare substring
+          # match would false-pass on a renamed skill (`-v2` suffix) or on another
+          # skill's description that merely mentions this name.
           for skill in python-blackbox-testing python-parameterized-testing; do
-            if grep -Fq "$skill" "$plain"; then
+            if grep -Eq "^[^[:alnum:]]*${skill}[^[:alnum:]]*$" "$plain"; then
               echo "OK: $skill is listed by skills.sh discovery"
             else
               echo "::error::skills.sh discovery output does not contain $skill"
