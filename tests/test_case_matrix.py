@@ -1,3 +1,5 @@
+import ast
+import importlib.util
 import json
 import subprocess
 import sys
@@ -9,6 +11,11 @@ SCRIPT = (
     Path(__file__).parents[1]
     / ".agents/skills/python-parameterized-testing/scripts/plan_case_matrix.py"
 )
+SPEC = importlib.util.spec_from_file_location("plan_case_matrix", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+HELPER = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = HELPER
+SPEC.loader.exec_module(HELPER)
 
 
 def run_helper(payload):
@@ -19,6 +26,16 @@ def run_helper(payload):
         text=True,
         capture_output=True,
         check=True,
+    )
+
+
+def run_helper_text(input_text):
+    return subprocess.run(
+        [sys.executable, str(SCRIPT)],
+        input=input_text,
+        text=True,
+        capture_output=True,
+        check=False,
     )
 
 
@@ -37,6 +54,170 @@ def test_plan_case_matrix_is_deterministic_and_respects_limit():
     result = json.loads(first.stdout)
     assert len(result["cases"]) <= 4
     assert result["truncated"] is True
+
+
+def test_seeded_sample_is_deterministic_and_capped():
+    payload = {
+        "dimensions": {
+            "n": {"values": [1, 2, 3], "boundary": [0, 10]},
+            "text": {"values": ["a", "b"], "boundary": [""]},
+        },
+        "max_cases": 3,
+        "seed": 8675309,
+        "sample_size": 5,
+    }
+
+    first = run_helper(payload)
+    second = run_helper(payload)
+    result = json.loads(first.stdout)
+
+    assert first.stdout == second.stdout
+    assert result["strategy"] == "seeded-sample"
+    assert result["seed"] == 8675309
+    assert len(result["cases"]) == 3
+    assert result["truncated"] is True
+    assert all(case["n"] in {0, 1, 2, 3, 10} for case in result["cases"])
+    assert all(case["text"] in {"", "a", "b"} for case in result["cases"])
+
+
+@pytest.mark.parametrize("missing", ["seed", "sample_size"])
+def test_seeded_sample_requires_both_fields(missing):
+    payload = {
+        "dimensions": {"n": {"values": [1, 2]}},
+        "max_cases": 2,
+        "seed": 11,
+        "sample_size": 2,
+    }
+    del payload[missing]
+
+    with pytest.raises(subprocess.CalledProcessError) as error:
+        run_helper(payload)
+
+    assert error.value.returncode == 2
+    assert error.value.stdout == ""
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_plan_case_matrix_rejects_non_finite_json(constant):
+    input_text = '{"dimensions": {"n": {"values": [' + constant + ']}}, "max_cases": 1}'
+
+    result = run_helper_text(input_text)
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr.startswith("error:")
+    assert len(result.stderr) < 200
+
+
+def test_plan_case_matrix_rejects_malformed_max_cases_with_exact_error():
+    result = run_helper_text('{"dimensions": {"n": {"values": [1]}}, "max_cases": 0}')
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr.startswith("error: max_cases must be a positive integer")
+    assert len(result.stderr) < 200
+
+
+def test_plan_case_matrix_rejects_invalid_boundary_type():
+    with pytest.raises(subprocess.CalledProcessError):
+        run_helper(
+            {
+                "dimensions": {"n": {"values": [1], "boundary": "invalid"}},
+                "max_cases": 1,
+            }
+        )
+
+
+def test_plan_case_matrix_marks_untruncated_matrix():
+    result = json.loads(
+        run_helper(
+            {
+                "dimensions": {"n": {"values": [2], "boundary": [0, 1]}},
+                "max_cases": 3,
+            }
+        ).stdout
+    )
+
+    assert result["cases"] == [{"n": 0}, {"n": 1}, {"n": 2}]
+    assert result["truncated"] is False
+
+
+def test_plan_case_matrix_rejects_excessive_value_list():
+    values = list(range(HELPER.MAX_VALUES_PER_DIMENSION + 1))
+
+    with pytest.raises(subprocess.CalledProcessError) as error:
+        run_helper({"dimensions": {"n": {"values": values}}, "max_cases": 1})
+
+    assert error.value.returncode == 2
+    assert error.value.stdout == ""
+
+
+def test_plan_case_matrix_sorts_dimension_names():
+    first = json.loads(
+        run_helper(
+            {
+                "dimensions": {
+                    "c": {"values": [2, 3]},
+                    "b": {"values": [1, 2]},
+                    "a": {"values": [0, 1]},
+                },
+                "max_cases": 8,
+            }
+        ).stdout
+    )
+    second = json.loads(
+        run_helper(
+            {
+                "dimensions": {
+                    "a": {"values": [0, 1]},
+                    "b": {"values": [1, 2]},
+                    "c": {"values": [2, 3]},
+                },
+                "max_cases": 8,
+            }
+        ).stdout
+    )
+
+    assert first == second
+    assert first["cases"][:2] == [
+        {"a": 0, "b": 1, "c": 2},
+        {"a": 0, "b": 1, "c": 3},
+    ]
+
+
+def test_plan_case_matrix_rejects_non_json_value_through_api():
+    with pytest.raises(HELPER.InputError, match="JSON-compatible"):
+        HELPER.plan_case_matrix({"dimensions": {"n": {"values": [object()]}}, "max_cases": 1})
+
+
+def test_helper_ast_has_no_execution_or_network_imports_and_no_writes():
+    tree = ast.parse(SCRIPT.read_text())
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add(node.module)
+
+    forbidden_roots = {"subprocess", "socket", "urllib", "requests", "my_project"}
+    assert not any(
+        module == forbidden or module.startswith(f"{forbidden}.")
+        for module in imported_modules
+        for forbidden in forbidden_roots
+    )
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                assert node.func.id != "open"
+            if isinstance(node.func, ast.Attribute):
+                assert node.func.attr not in {
+                    "write_text",
+                    "write_bytes",
+                    "unlink",
+                    "mkdir",
+                    "touch",
+                }
 
 
 def test_plan_case_matrix_rejects_malformed_input():

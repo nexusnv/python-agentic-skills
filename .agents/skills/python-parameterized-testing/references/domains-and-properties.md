@@ -34,6 +34,13 @@ Separate these classes in the plan and report:
 State exclusions explicitly. A focused request may narrow coverage, but it must not erase valid,
 invalid, unsupported, or safety cases that are relevant to the stated contract.
 
+## Safety boundary
+
+**Unconditionally refuse real secrets, live credentials, customer data, and production data.**
+Approval may permit only a narrowly scoped, non-sensitive live call, destructive operation, or
+cost-incurring action; approval never authorizes secret or data access. Prefer a local synthetic
+adapter with synthetic data and record blocked work as not run.
+
 ## Property families
 
 Choose only properties that express meaningful behavior for the target:

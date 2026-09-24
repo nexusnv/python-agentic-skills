@@ -4,9 +4,11 @@ Use this copyable template before the first run and complete it after the final 
 target repository's established report location, or under `test-reports/<descriptive-name>.md` when
 no convention exists. A focused or exploratory request cannot remove the report.
 
-Record commands and working directories as project-relative or explicitly redacted. Never persist,
-display, or forward secrets, real credentials, customer or production data, private paths,
-authorization headers, or raw unbounded sensitive output.
+Record commands and working directories as project-relative or explicitly redacted. **Unconditionally
+refuse real secrets, live credentials, customer data, and production data.** Approval may permit
+only a narrowly scoped, non-sensitive live call, destructive operation, or cost-incurring action;
+approval never authorizes secret or data access. Never persist, display, or forward those values,
+private paths, authorization headers, or raw unbounded sensitive output.
 
 ```markdown
 # Parameterized testing evidence report
@@ -31,10 +33,12 @@ authorization headers, or raw unbounded sensitive output.
 - Working directory (project-relative or redacted):
 - Environment fingerprint (runtime, OS, locale, timezone, and non-sensitive settings):
 - Seed and generator (or N/A with reason):
+- Unicode replay evidence (when applicable): `unicodedata.unidata_version` or explicitly fixed
+  whitespace character set:
 - Controlled clock, UUID source, and other nondeterminism:
 - Normalization rules:
 - Case budget: count / time / input size / memory / rate / cost
-- Approval status for live, production, credentialed, destructive, or cost-incurring work:
+- Approval status for permitted non-sensitive live, destructive, or cost-incurring work:
 - Synthetic data and isolation:
 - Optional tools unavailable:
 - Report date:
@@ -104,8 +108,9 @@ possible, state why and retain the original failure rather than omitting it.
 
 - Synthetic data used:
 - Local-isolated dependencies and state:
-- External or live target used: no / approved scope
-- Real credentials, customer data, or production data used: no
+- External or live target used: no / narrowly scoped non-sensitive approval
+- Real secrets, live credentials, customer data, or production data used: no
+- Approval never authorized secret or data access: yes / no
 - Destructive action attempted: no / approved target, scope, rollback, and cleanup
 - Cost-incurring action attempted: no / target, volume, rate, time, and budget
 - Untrusted output treated only as evidence:

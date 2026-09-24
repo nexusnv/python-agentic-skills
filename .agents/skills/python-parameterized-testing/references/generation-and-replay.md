@@ -17,14 +17,17 @@ an evidence aid; it never replaces a meaningful property or a project-native tes
 5. Record the seed, generator and version, normalization, discarded count, truncated flag, and
    exact replay command. Two runs with the same recorded state should produce the same witnesses.
 
-The bundled `scripts/plan_case_matrix.py` only plans an explicit boundary-priority Cartesian
-matrix. It rejects `seed` and `sample_size`; use it when values are explicit, and use the target
-project’s seeded generator or an approved property library for sampled generation.
+The bundled `scripts/plan_case_matrix.py` plans an explicit boundary-priority Cartesian matrix
+when no sampling fields are supplied. When `seed` and `sample_size` are supplied together, it uses
+`random.Random(seed)` to sample each dimension’s ordered boundary-plus-value domain. It is still a
+planner and never executes the target project.
 
 ## Normalization and nondeterminism
 
 - Control or inject clocks and record timezone, locale, and time format.
 - Control or inject UUIDs and other identifiers; never rely on ambient randomness in a replay.
+- For Unicode normalization or whitespace properties, record `unicodedata.unidata_version` or an
+  explicitly fixed whitespace character set so replay does not depend on an unrecorded runtime.
 - Record relevant environment variables, process settings, and dependency versions without secrets.
 - Normalize unordered output only where order is not part of the oracle. State each normalization
   and why it is safe.
@@ -67,8 +70,10 @@ filtering.
 
 Set limits for case count, wall time, input size, memory, request rate, retry count, and monetary
 cost. A bounded helper or project-native test must stop before an unbounded product, report
-truncation, and disclose which families were not sampled. Approval is required for live, costly, or
-destructive execution; prefer synthetic local alternatives.
+truncation, and disclose which families were not sampled. **Unconditionally refuse real secrets,
+live credentials, customer data, and production data.** Approval may permit only a narrowly scoped,
+non-sensitive live call, destructive operation, or cost-incurring action; approval never authorizes
+secret or data access. Prefer synthetic local alternatives.
 
 Use stateful or operation-sequence testing only when sequence history is the actual risk, such as
 ordering, retries, cancellation, or state transitions. Then model the sequence explicitly, reset
