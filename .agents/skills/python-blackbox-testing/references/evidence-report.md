@@ -29,10 +29,10 @@ output outside the report.
 - Seed (or N/A with reason):
 - Environment mode: local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified
 - Isolation/scope verification (exact method and result):
-- Approval status: not-required / approved / blocked
-- Approval scope (target/method/data/volume/time limits; budget when paid):
-- Credential approval status: not-required / approved / blocked
-- Credential approval scope (target/method/synthetic-data/volume/rate/time limits):
+- run_approval_status: not-required / approved / blocked
+- run_approval_scope (target/method/data/volume/rate/time limits; budget when paid):
+- credential_approval_status: not-required / approved / blocked
+- credential_approval_scope (target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits):
 - Destructive scope (target/maximum affected resources/rollback/cleanup/permission; budget not applicable):
 - Controlled environment, clock, locale, timezone, and identifiers:
 - Optional tools unavailable:
@@ -40,9 +40,12 @@ output outside the report.
 
 ## Scenario matrix
 
-| scenario_id | execution_id | Traceability | Label | Input class | Preconditions | Invocation | Properties/invariants | Coverage areas/plan | Expected result | Expected failure / not-applicable reason | Expected side effects | Cleanup | environment_mode | isolation_scope_verification | approval_status | approval_scope | Credential approval status | Credential approval scope | Safety status | result_status |
+| scenario_id | execution_id | Traceability | Label | Input class | Preconditions | Invocation | Properties/invariants | Coverage areas/plan | Expected result | Expected failure / not-applicable reason | Expected side effects | Cleanup | environment_mode | isolation_scope_verification | run_approval_status | run_approval_scope | credential_approval_status | credential_approval_scope | Safety status | planned_result_state |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-|  | execution ID or N/A for blocked/not-run |  |  |  |  |  | named properties or N/A — example-only — reason | input families, boundaries, state transitions, exclusions |  |  |  |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/method/synthetic-data/volume/rate/time limits | default-safe / approved side effect / verified sandbox / blocked-not-run / refusal | pass / fail / skip / expected-failure / not-run |
+|  | pending before execution; N/A for blocked/not-run |  |  |  |  |  | named properties or N/A — example-only — reason | input families, boundaries, state transitions, exclusions |  |  |  |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits | default-safe / approved side effect / verified sandbox / blocked-not-run / refusal | planned |
+
+The scenario matrix is a planning table, not an actual result table. Set `execution_id: pending`
+before execution; use `N/A` for blocked/not-run. Write actual outcomes in `Results` or `Not run`.
 
 ## Oracles and normalization
 
@@ -55,9 +58,9 @@ volatile.
 
 ## Exact executions
 
-| execution_id | scenario_ids | Environment mode | Isolation/scope verification | Approval status | Approval scope | Credential approval status | Credential approval scope | Exact command | Exit status | Runner | Environment fingerprint | Result state | Relevant bounded excerpt |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| execution-001 | scenario-id-001 | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/method/synthetic-data/volume/rate/time limits |  |  |  |  | pass / fail / skip / expected-failure |  |
+| execution_id | scenario_ids | Environment mode | Isolation/scope verification | run_approval_status | run_approval_scope | credential_approval_status | credential_approval_scope | Exact command | Exit status | Runner | Environment fingerprint | Relevant bounded excerpt |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| execution-001 | scenario-id-001 | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits |  |  |  |  |  |
 
 Only executed rows belong in `Exact executions`; every row has a real execution ID and an executed
 result state. Keep `scenario_id` stable across retries and assign a new `execution_id` to every
@@ -67,12 +70,13 @@ remain unambiguous. A blocked or not-run result belongs only in `Not run` and us
 
 ## Results
 
-| execution_id | scenario_id | Properties/invariants | Coverage areas/plan | Environment mode | Isolation/scope verification | Approval status | Approval scope | Credential approval status | Credential approval scope | Result status | Oracle outcome | Observed outcome | Retry of execution_id | Notes |
+| execution_id | scenario_id | Properties/invariants | Coverage areas/plan | Environment mode | Isolation/scope verification | run_approval_status | run_approval_scope | credential_approval_status | credential_approval_scope | result_state | observed_public_outcome | evidence_reference | retry_of_execution_id | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-|  |  | named properties or N/A — example-only — reason | input families, boundaries, state transitions, exclusions | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/method/synthetic-data/volume/rate/time limits | pass / fail / skip / expected-failure / not-run |  |  |  |  |
+|  |  | named properties or N/A — example-only — reason | input families, boundaries, state transitions, exclusions | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits | pass / fail / skip / expected-failure |  |  |  |  |
 
-Executed rows use their exact `execution_id`; blocked/not-run rows use `N/A`, explain the reason,
-and have no linked command or exit status.
+Results contain one row per executed scenario result with `scenario_id`, `execution_id`,
+`result_state`, `observed_public_outcome`, and `evidence_reference`. Exclude blocked/not-run rows;
+put those only in `Not run` with `execution_id: N/A`, a reason, and no command or exit status.
 
 ## Failures and minimized reproducers
 
@@ -88,11 +92,14 @@ and have no linked command or exit status.
 - Environment fingerprint and relevant tool versions:
 - Environment mode:
 - Isolation/scope verification (exact method and result):
-- Approval status and scope:
+- run_approval_status:
+- run_approval_scope:
+- credential_approval_status:
+- credential_approval_scope:
 - Expected observable outcome:
 - Actual observable outcome:
 - Oracle source:
-- Exit status and result state:
+- result_state:
 - Classification: product defect / environment issue / bad oracle / flaky / blocked
 - Smaller-case search and discarded attempts:
 - Diagnosis:
@@ -111,7 +118,10 @@ No minimized reproducer: state why minimization was not applicable or possible.
 
 - Environment mode:
 - Isolation/scope verification (exact method and result):
-- Approval status and scope:
+- run_approval_status:
+- run_approval_scope:
+- credential_approval_status:
+- credential_approval_scope:
 - Synthetic data used:
 - Local-isolated dependencies:
 - Local-unisolated state and verification:
@@ -134,11 +144,13 @@ No minimized reproducer: state why minimization was not applicable or possible.
 
 ## Not run
 
-| scenario_id | execution_id | Result status | Reason | Environment mode | Approval status | Coverage impact |
-| --- | --- | --- | --- | --- | --- | --- |
-|  | N/A | not-run |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified | not-required / approved / blocked |  |
+| scenario_id | execution_id | result_state | Reason | Environment mode | run_approval_status | run_approval_scope | credential_approval_status | credential_approval_scope | Coverage impact |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+|  | N/A | not-run |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits |  |
 
-Blocked and not-run rows never claim an exact command or exit status.
+`Not run` is the only structured location for blocked/not-run rows. They use `scenario_id`,
+`execution_id: N/A`, a reason, and run/credential approval fields, but no command or exit status.
+
 
 ## Coverage gaps and limitations
 

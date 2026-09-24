@@ -40,11 +40,14 @@ explicit narrow approval. A verified external sandbox may proceed without approv
 recorded verification succeeds and the user request raises no separate live, paid, destructive, or
 other gate.
 
-Approval scope must identify the target and method, synthetic-data scope, and volume, rate, and time
-limits; a paid call also requires a monetary budget. Using any test credential is a separate
-credential-approval gate with its own target/method/synthetic-data/volume/rate/time scope; record
-its status and scope separately. An approved least-privilege synthetic test credential is not a real
-user/production credential. Supply it only through an approved mechanism and never record its value.
+Run approval scope must identify the target and method, synthetic-data scope, and volume, rate, and
+time limits; a paid call also requires a monetary budget. A paid step in a verified external sandbox
+remains `external-sandbox-verified`; cost alone does not change the environment mode, but the run
+approval and budget must be recorded. Using any test credential is a separate
+`credential_approval_status`/`credential_approval_scope` gate with its own target/service,
+least-privilege, synthetic/test-only constraint, expiry/rotation, and volume/rate/time scope. An
+approved least-privilege synthetic test credential is not a real user/production credential. Supply
+it only through an approved mechanism and never record its value.
 Approval never authorizes secrets, customer data, or production data and cannot override repository
 prohibitions.
 
@@ -89,8 +92,9 @@ and record refused or blocked work as `not-run`.
   every `external-sandbox-unverified` endpoint requires approval. An
   `external-sandbox-verified` endpoint may proceed only with recorded successful verification and
   no other gate. Name approved target/method, synthetic-data scope, and volume/rate/time limits.
-  Use only an approved least-privilege synthetic test credential without recording its value. A
-  paid request also requires a monetary budget. Refuse secrets, customer data, and production data.
+  If the target requires authentication, use a separately approved least-privilege synthetic test
+  credential without recording its value. A paid request also requires a monetary budget. Refuse
+  secrets, customer data, and production data.
 
 ## Filesystem and database
 
@@ -141,7 +145,7 @@ and record refused or blocked work as `not-run`.
 | Local container, API, CLI, temporary database, local server, fake, or isolated test environment with synthetic data | Set mode `local-isolated`; proceed without approval. | Approval `not-required`; run normally. |
 | Shared/stale local state, shared database/workspace, or unverifiable local isolation | Set mode `local-unisolated`. Require approval for side effects; otherwise make the check manual/non-gating. | Approval `not-required` only when no side effect; otherwise `approved` or `blocked`/`not-run`. |
 | Missing local dependency | Offer an explicit lightweight fallback only if meaningful. | Mark unavailable check `not-run`. |
-| External-live service or cost-incurring call | Set mode `external-live`; require narrow approval for target/method, synthetic-data scope, volume/rate/time limits, and an approved least-privilege synthetic test credential; paid calls also require a budget. | Approval `approved` or `blocked`; `not-run` while blocked. |
+| External-live service or cost-incurring call | Set mode according to the target; require narrow run approval for target/method, synthetic-data scope, volume/rate/time limits, and a budget when paid. Require a separate approved test credential only when the target needs authentication. | Run approval `approved` or `blocked`; credential approval is separate when needed; `not-run` while blocked. |
 | Remote environment with verified isolation and scope | Set mode `external-sandbox-verified` and record the exact verification. Approval is not required only when the user request permits it and no other gate applies. | Record `not-required` or the separate approval status. |
 | Remote environment with unverified isolation or scope | Set mode `external-sandbox-unverified` and require narrow approval before use. | Approval `approved` or `blocked`; `not-run` while blocked. |
 | Secrets, secret-store access, customer data, or production data | Refuse unconditionally and offer synthetic substitution. Approval cannot authorize access or override repository policy. | `not-run`. |

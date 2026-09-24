@@ -94,7 +94,7 @@ stable across retries, and assign a unique `execution_id` to each command run. I
 | Field | Required content |
 | --- | --- |
 | `scenario_id` | Stable scenario identifier reused across retries. |
-| `execution_id` | Unique identifier for one executed command; use `N/A` for blocked/not-run and record retry lineage separately. |
+| `execution_id` | `pending` before execution; unique identifier for one executed command; use `N/A` for blocked/not-run and record retry lineage separately. |
 | Traceability | Public interface, contract, defect, or open question. |
 | Label | Contract, characterization, regression, or suspicious current behavior. |
 | Input class | Valid, invalid, boundary, stateful, negative, or another explicit behavioral family. |
@@ -108,12 +108,12 @@ stable across retries, and assign a unique `execution_id` to each command run. I
 | Cleanup | Teardown, affected-resource limit, and verification where side effects occur. |
 | `environment_mode` | `local-isolated`, `local-unisolated`, `external-live`, `external-sandbox-verified`, or `external-sandbox-unverified`. |
 | `isolation_scope_verification` | Exact verification method and result, including why `local-unisolated` applies when relevant. |
-| `approval_status` | `not-required`, `approved`, or `blocked`. |
-| `approval_scope` | Target/method/data/volume/time limits and paid-call budget, or destructive target/maximum resources/rollback/cleanup/permission. |
-| `Credential approval status` | `not-required`, `approved`, or `blocked`; using any test credential is a separate gate. |
-| `Credential approval scope` | Target/method/synthetic-data/volume/rate/time limits for the credential; never the credential value. |
+| `run_approval_status` | `not-required`, `approved`, or `blocked`. |
+| `run_approval_scope` | Target/method/data/volume/rate/time limits and paid-call budget, or destructive target/maximum resources/rollback/cleanup/permission. |
+| `credential_approval_status` | `not-required`, `approved`, or `blocked`; using any test credential is a separate gate. |
+| `credential_approval_scope` | Target/service, least-privilege, synthetic/test-only constraint, expiry/rotation, and volume/rate/time limits; never the credential value. |
 | Safety status | Default-safe local isolation; approved side effect; verified external sandbox; manual/not-run gate; or unconditional refusal. |
-| `result_status` | Pass, fail, skip, expected-failure, or not-run linked to the execution. |
+| `planned_result_state` | Planned result state before execution; actual outcomes belong in the result table. |
 
 A broad default matrix should cover the relevant input families and state transitions without
 creating an uncontrolled Cartesian product. A requested focus narrows the prioritized set; record

@@ -2,12 +2,11 @@
 name: python-blackbox-testing
 description: >-
   Discover, characterize, specify, and protect Python behavior through public
-  interfaces such as APIs, CLIs, services, events, files, databases, and user
-  workflows. Use when a user asks for black-box testing, contract testing,
-  characterization tests, regression coverage, public-boundary tests, or
-  behavior-focused verification across a Python project. Do not replace a
-  public-boundary test with private implementation assertions when a public
-  contract exists.
+  interfaces including APIs, CLIs, services, events, files, databases, and user
+  workflows. Use when asked for black-box, contract, characterization, regression,
+  public-boundary, behavior-focused, or integration testing in a Python project.
+  Do not activate solely for private helpers or internal call order when a
+  public seam exists; redirect the request to public behavior instead.
 license: MIT
 compatibility: >-
   Python project-agnostic; uses existing project test tools and does not require
@@ -52,10 +51,13 @@ product-code fix.
   `external-sandbox-verified` run may proceed without approval only when its exact isolation/scope
   verification is recorded and the user request permits it with no other approval gate.
 - For every approval, record target/method, synthetic-data scope, volume/rate/time limits, and a
-  monetary budget for paid calls. An approved least-privilege synthetic test credential is not a
-  real user/production credential; use it only through an approved mechanism and never record its
-  value. Treat credential use as a separate approval gate with its own target/method/data and
-  volume/rate/time scope, recorded as `Credential approval status` and `Credential approval scope`.
+  monetary budget for paid calls. A paid step in a verified external sandbox remains
+  `external-sandbox-verified`; cost alone does not change the environment mode. An approved
+  least-privilege synthetic test credential is not a real user/production credential; use it only
+  through an approved mechanism and never record its value. Treat credential use as a separate
+  approval gate with its own target/service, least-privilege, synthetic/test-only, expiry/rotation,
+  and volume/rate/time scope, recorded as `credential_approval_status` and
+  `credential_approval_scope`.
 - Keep destructive actions blocked until explicit permission names the exact target, maximum
   affected records or resources, and rollback, cleanup, and post-action verification constraints.
   Do not require a monetary budget for ordinary cleanup. Approval for a live, paid, or destructive
@@ -90,10 +92,11 @@ product-code fix.
    event, or UI only when that is the contract under test. Load
    `references/adapters-and-safety.md` before implementing the adapter or invoking a dependency.
 4. **Build the scenario matrix.** Cover relevant valid, invalid, boundary, stateful, and negative
-   behavior. Include failure behavior and absence of unintended mutation. Give every row an
-   input class, preconditions, expected observable result or failure, expected side effects,
-   cleanup, oracle source, label, and traceability. Label it as `contract`, `characterization`,
-   `regression`, or `suspicious current behavior`.
+   behavior. Include failure behavior and absence of unintended mutation. Give every planning row a
+   stable `scenario_id`, `execution_id: pending`, input class, preconditions, properties/invariants,
+   coverage areas/plan, expected result or failure, expected side effects, cleanup, safety status,
+   planned result state, oracle source, label, and traceability. Label it as `contract`,
+   `characterization`, `regression`, or `suspicious current behavior`.
 5. **Name the oracle before execution.** Prefer an exact outcome, stable error, state transition,
    absence of side effects, contract matcher, differential model, or reviewed golden result. State
    normalization rules for genuinely volatile fields only. Do not weaken an oracle merely to
@@ -106,8 +109,9 @@ product-code fix.
    gate. Unconditionally refuse real secrets, customer data, and production data. Approval scope
    must name target/method, data, volume/rate/time limits, and a paid-call budget. Destructive scope
    instead names the target, maximum affected resources, rollback/cleanup, and permission. Record
-   `Credential approval status` and `Credential approval scope` separately for any test credential;
-   never record a test credential value. Honor repository prohibitions over approval.
+   `credential_approval_status` and `credential_approval_scope` separately for any test credential;
+   record `run_approval_status` and `run_approval_scope` for the execution. Never record a test
+   credential value. Honor repository prohibitions over approval.
 7. **Implement project-native tests.** Reuse fixtures, factories, markers, parameter tables, and
    assertion helpers. Keep tests at the public seam. Do not add a new dependency or runner unless
    the user requests it and the target repository's constraints permit it.
@@ -117,7 +121,9 @@ product-code fix.
    Every executed result records both IDs, runner, environment fingerprint, exact command, and exit
    status. For a blocked or `not-run` result, record `scenario_id`, `execution_id: N/A`, the reason,
    and no command or exit status.
-   Record other result states as `pass`, `fail`, `skip`, or `expected-failure`. Load
+   Record other result states as `pass`, `fail`, `skip`, or `expected-failure`. Keep the scenario
+   matrix as planning data with `execution_id: pending`; write actual scenario outcomes to the
+   results table and blocked/not-run rows only to the Not run table. Load
    `references/evidence-report.md` before the first run and again before finishing the report.
 9. **Diagnose and minimize failures.** Reduce the reproducer while preserving the failure, replay
    exact state and inputs, and distinguish product defects, environment failures, bad oracles, and
