@@ -46,6 +46,7 @@ def _validate_json_value(value: Any) -> None:
         for key, item in value.items():
             if not isinstance(key, str):
                 raise InputError("values must be JSON-compatible objects")
+            _validate_json_value(key)
             _validate_json_value(item)
         return
     raise InputError("values must be JSON-compatible")
@@ -76,6 +77,15 @@ def _ordered_unique(values: Iterable[Any]) -> list[Any]:
             seen.add(key)
             unique.append(value)
     return unique
+
+
+def _validate_payload_keys(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise InputError("top-level JSON value must be an object")
+    for key in payload:
+        if not isinstance(key, str):
+            raise InputError("top-level payload keys must be strings")
+        _validate_json_value(key)
 
 
 def _validate_dimensions(payload: Any) -> dict[str, list[Any]]:
@@ -187,8 +197,7 @@ def _plan_seeded(
 
 def plan_case_matrix(payload: Any) -> dict[str, Any]:
     """Validate and plan a bounded Cartesian or seeded case matrix."""
-    if not isinstance(payload, dict):
-        raise InputError("top-level JSON value must be an object")
+    _validate_payload_keys(payload)
     seed, sample_size = _validate_sampling(payload)
     max_cases = _validate_max_cases(payload)
     dimensions = _validate_dimensions(payload)

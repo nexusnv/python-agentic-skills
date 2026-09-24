@@ -199,6 +199,36 @@ def test_plan_case_matrix_rejects_surrogate_through_subprocess():
     assert "surrogate" in result.stderr.lower()
 
 
+def test_plan_case_matrix_rejects_surrogate_object_key_through_api():
+    with pytest.raises(HELPER.InputError, match="surrogate"):
+        HELPER.plan_case_matrix({"dimensions": {"n": {"values": [{"\ud800": 1}]}}, "max_cases": 1})
+
+
+def test_plan_case_matrix_rejects_surrogate_object_key_through_subprocess():
+    input_text = json.dumps(
+        {"dimensions": {"n": {"values": [{"\ud800": 1}]}}, "max_cases": 1},
+        ensure_ascii=True,
+    )
+
+    result = run_helper_text(input_text)
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr.startswith("error:")
+    assert "surrogate" in result.stderr.lower()
+
+
+def test_plan_case_matrix_requires_string_top_level_keys():
+    payload = {
+        1: "ignored",
+        "dimensions": {"n": {"values": [1]}},
+        "max_cases": 1,
+    }
+
+    with pytest.raises(HELPER.InputError, match="top-level payload keys must be strings"):
+        HELPER.plan_case_matrix(payload)
+
+
 def test_plan_case_matrix_rejects_invalid_boundary_type():
     with pytest.raises(subprocess.CalledProcessError):
         run_helper(
