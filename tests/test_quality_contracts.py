@@ -234,7 +234,7 @@ TEMPLATE_TABLE_REQUIREMENTS = {
                 "environment",
                 "bounded evidence",
             ),
-            (),
+            {},
         ),
         (
             "Results",
@@ -637,6 +637,23 @@ SAFETY_FIXTURE_CONTRACTS = {
     )
     for key, expected_fields in SAFETY_FIXTURE_EXPECTED_FIELDS.items()
 }
+# Risky fixtures must require their approval-scope field list, not merely allow it.
+# python-parameterized-testing names its approval scope list differently.
+KNOWN_RISKY_SCOPE_REQUIRED_FIELDS = {
+    "live": "run_approval_scope_required_fields",
+    "external": "run_approval_scope_required_fields",
+    "destructive": "run_approval_scope_required_fields",
+    "paid": "approval_scope_required_fields",
+}
+APPROVED_CREDENTIAL_RISK_CLASS = "credential"
+APPROVED_CREDENTIAL_CRITICAL_SCOPE_FIELDS = (
+    "run_approval_scope",
+    "credential_approval_scope",
+)
+APPROVED_CREDENTIAL_CRITICAL_SCALAR_FIELDS = (
+    "isolation_scope_verification",
+    "credential_approval_status",
+)
 FORBIDDEN_REDACTION_CREDENTIAL_FIELDS = frozenset(
     {"credential_use", "real_credential_use", "real_secret_access", "approved_test_credential_used"}
 )
@@ -1105,13 +1122,50 @@ SAFETY_ALLOWED_EXPECTED_FIELDS = {
 }
 
 
+class UniqueKeySafeLoader(yaml.SafeLoader):
+    pass
+
+
+def _construct_unique_mapping(
+    loader: UniqueKeySafeLoader, node: yaml.nodes.MappingNode, deep: bool = False
+) -> dict[object, object]:
+    loader.flatten_mapping(node)
+    mapping: dict[object, object] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        try:
+            duplicate = key in mapping
+        except TypeError as error:
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                "found unhashable key",
+                key_node.start_mark,
+            ) from error
+        if duplicate:
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                f"found duplicate key {key!r}",
+                key_node.start_mark,
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+UniqueKeySafeLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_unique_mapping,
+)
+
+
 def skill_files() -> list[Path]:
     return sorted(SKILLS_ROOT.glob("*/SKILL.md"))
 
 
 def load_cases(skill: Path) -> list[dict[str, Any]]:
     cases_path = skill.parent / "evals" / "cases.yaml"
-    cases = yaml.safe_load(cases_path.read_text(encoding="utf-8"))
+    cases = yaml.load(cases_path.read_text(encoding="utf-8"), Loader=UniqueKeySafeLoader)
     assert isinstance(cases, list), f"{cases_path} must contain a top-level list"
     return cases
 
@@ -1190,7 +1244,7 @@ def _assert_table_requirements(
     template: str,
     section_name: str,
     required_fields: tuple[str, ...],
-    required_body_markers: tuple[str, ...],
+    required_body_markers: dict[str, tuple[str, ...]],
     template_path: Path,
 ) -> None:
     sections = _template_sections(template)
@@ -1342,6 +1396,26 @@ def test_each_skill_has_an_explicit_diagnosis_only_implementation_gate(skill):
     assert "ask before implementation changes" in normalized, (
         f"{skill} must ask before implementation changes"
     )
+
+
+def test_load_cases_rejects_duplicate_yaml_mapping_keys(tmp_path):
+    skill = tmp_path / "SKILL.md"
+    skill.write_text("fixture\n", encoding="utf-8")
+    cases = skill.parent / "evals" / "cases.yaml"
+    cases.parent.mkdir()
+    cases.write_text(
+        """- id: duplicate-approval
+  prompt: Use this fixture only to exercise duplicate-key rejection.
+  kind: safety
+  expected:
+    approval_bypass: true
+    approval_bypass: false
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(yaml.constructor.ConstructorError, match="duplicate key.*approval_bypass"):
+        load_cases(skill)
 
 
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
@@ -2286,6 +2360,47 @@ def _assert_credential_type_scope(
         ), f"{context} requires an approved synthetic/test-only credential scope"
 
 
+def _contains_non_scalar_item(value: Any) -> bool:
+    return isinstance(value, list) and any(not _is_expected_scalar(item) for item in value)
+
+
+def _is_nonempty_string(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_nonempty_scope_value(value: Any) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, list) and value:
+        return all(isinstance(item, str) and item.strip() for item in value)
+    return False
+
+
+def _assert_required_scope_list(expected: dict[str, Any], field: str, context: str) -> None:
+    value = expected.get(field)
+    if _contains_non_scalar_item(value):
+        return
+    assert (
+        isinstance(value, list)
+        and value
+        and all(isinstance(item, str) and item.strip() for item in value)
+    ), f"{context} requires {field} to be a non-empty list of non-empty strings"
+
+
+def _assert_required_scope_value(expected: dict[str, Any], field: str, context: str) -> None:
+    value = expected.get(field)
+    if _contains_non_scalar_item(value):
+        return
+    assert _is_nonempty_scope_value(value), f"{context} requires {field} to be a non-empty value"
+
+
+def _assert_required_string_value(expected: dict[str, Any], field: str, context: str) -> None:
+    value = expected.get(field)
+    if _contains_non_scalar_item(value):
+        return
+    assert _is_nonempty_string(value), f"{context} requires {field} to be a non-empty value"
+
+
 def assert_safety_fixture_contract(fixture: dict[str, Any], skill_name: str) -> None:
     fixture_id = fixture["id"]
     contract_key = (skill_name, fixture_id)
@@ -2303,6 +2418,15 @@ def assert_safety_fixture_contract(fixture: dict[str, Any], skill_name: str) -> 
         f"{context} has expected fields outside its skill schema: {sorted(skill_unknown_fields)}"
     )
     safety_contract = SAFETY_FIXTURE_CONTRACTS[contract_key]
+    risk_class = safety_contract.expected_fields.get("risk_class")
+    scope_required_field = KNOWN_RISKY_SCOPE_REQUIRED_FIELDS.get(risk_class)
+    if scope_required_field is not None:
+        _assert_required_scope_list(expected, scope_required_field, context)
+    if risk_class == APPROVED_CREDENTIAL_RISK_CLASS:
+        for field in APPROVED_CREDENTIAL_CRITICAL_SCOPE_FIELDS:
+            _assert_required_scope_value(expected, field, context)
+        for field in APPROVED_CREDENTIAL_CRITICAL_SCALAR_FIELDS:
+            _assert_required_string_value(expected, field, context)
     contract = {**SAFETY_COMMON_FIELDS[skill_name], **safety_contract.expected_fields}
     for field, wanted in contract.items():
         actual = expected.get(field)
@@ -2458,6 +2582,118 @@ def test_safety_common_fields_are_required_for_every_known_fixture():
                 del incomplete["expected"][field]
                 with pytest.raises(AssertionError, match=rf"requires {field}"):
                     assert_safety_fixture_contract(incomplete, skill_name)
+
+
+@pytest.mark.parametrize(
+    ("skill_name", "fixture_id", "scope_field"),
+    [
+        (
+            "python-blackbox-testing",
+            "production-endpoint-real-token",
+            "run_approval_scope_required_fields",
+        ),
+        (
+            "python-blackbox-testing",
+            "destructive-database-and-file-cleanup",
+            "run_approval_scope_required_fields",
+        ),
+        (
+            "python-blackbox-testing",
+            "external-sandbox-unverified-approval",
+            "run_approval_scope_required_fields",
+        ),
+        (
+            "python-parameterized-testing",
+            "live-credential-and-cost-scope-gate",
+            "approval_scope_required_fields",
+        ),
+    ],
+)
+def test_known_risky_safety_fixtures_require_run_approval_scope_fields(
+    skill_name, fixture_id, scope_field
+):
+    fixture = fixture_by_id(SKILLS_ROOT / skill_name / "SKILL.md", fixture_id)
+    incomplete = deepcopy(fixture)
+    del incomplete["expected"][scope_field]
+
+    with pytest.raises(AssertionError, match=rf"requires {scope_field}"):
+        assert_safety_fixture_contract(incomplete, skill_name)
+
+
+@pytest.mark.parametrize(
+    ("skill_name", "fixture_id", "scope_field"),
+    [
+        (
+            "python-blackbox-testing",
+            "production-endpoint-real-token",
+            "run_approval_scope_required_fields",
+        ),
+        (
+            "python-parameterized-testing",
+            "live-credential-and-cost-scope-gate",
+            "approval_scope_required_fields",
+        ),
+    ],
+)
+@pytest.mark.parametrize("invalid_value", [None, [], [""], ["   "], "exact-target"])
+def test_known_risky_safety_fixtures_reject_invalid_run_approval_scope_fields(
+    skill_name, fixture_id, scope_field, invalid_value
+):
+    fixture = fixture_by_id(SKILLS_ROOT / skill_name / "SKILL.md", fixture_id)
+    contradictory = deepcopy(fixture)
+    contradictory["expected"][scope_field] = invalid_value
+
+    with pytest.raises(
+        AssertionError,
+        match=rf"{scope_field}.*non-empty list of non-empty strings",
+    ):
+        assert_safety_fixture_contract(
+            contradictory,
+            skill_name,
+        )
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "run_approval_scope",
+        "isolation_scope_verification",
+        "credential_approval_status",
+        "credential_approval_scope",
+    ],
+)
+def test_approved_credential_safety_fixture_requires_critical_fields(field):
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "approved-least-privilege-sandbox-credential",
+    )
+    incomplete = deepcopy(fixture)
+    del incomplete["expected"][field]
+
+    with pytest.raises(AssertionError, match=rf"requires {field}"):
+        assert_safety_fixture_contract(incomplete, "python-blackbox-testing")
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "run_approval_scope",
+        "isolation_scope_verification",
+        "credential_approval_status",
+        "credential_approval_scope",
+    ],
+)
+@pytest.mark.parametrize("invalid_value", [None, "", [], [""], ["   "]])
+def test_approved_credential_safety_fixture_rejects_empty_critical_fields(field, invalid_value):
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "approved-least-privilege-sandbox-credential",
+    )
+    contradictory = deepcopy(fixture)
+    contradictory["expected"][field] = invalid_value
+
+    with pytest.raises(AssertionError, match=rf"requires .*{field}.*non-empty"):
+        assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
 
 
 @pytest.mark.parametrize("skill_name", sorted(CANONICAL_POSITIVE_SAFETY_FIXTURES))
@@ -3008,6 +3244,26 @@ def _function_parameters(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[s
     ]
 
 
+def _function_defaults_and_annotations(
+    node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda,
+) -> list[ast.AST]:
+    arguments = node.args
+    expressions: list[ast.AST] = [*arguments.defaults]
+    expressions.extend(default for default in arguments.kw_defaults if default is not None)
+    for argument in (
+        *arguments.posonlyargs,
+        *arguments.args,
+        *arguments.kwonlyargs,
+        *((arguments.vararg,) if arguments.vararg is not None else ()),
+        *((arguments.kwarg,) if arguments.kwarg is not None else ()),
+    ):
+        if argument.annotation is not None:
+            expressions.append(argument.annotation)
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.returns is not None:
+        expressions.append(node.returns)
+    return expressions
+
+
 def _call_parameter_bindings(
     tree: ast.AST,
 ) -> list[tuple[list[ast.AST], ast.AST]]:
@@ -3112,6 +3368,32 @@ def ast_contract_violations(source: str) -> list[str]:
     violations.extend(alias_violations)
 
     for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            if any(
+                _is_forbidden_alias_value(
+                    expression,
+                    forbidden_aliases,
+                    module_bindings,
+                    forbidden_subscripts,
+                    forbidden_attributes,
+                )
+                for expression in _function_defaults_and_annotations(node)
+            ):
+                violations.append("forbidden function default or annotation")
+        elif isinstance(node, ast.Call):
+            call_arguments = (*node.args, *(keyword.value for keyword in node.keywords))
+            if any(
+                _is_forbidden_alias_value(
+                    argument,
+                    forbidden_aliases,
+                    module_bindings,
+                    forbidden_subscripts,
+                    forbidden_attributes,
+                )
+                for argument in call_arguments
+            ):
+                violations.append("forbidden expression in call argument")
+
         if _is_dunder_attribute(node) or (isinstance(node, ast.Name) and node.id == "__builtins__"):
             violations.append("forbidden dunder access")
         if (
@@ -3197,6 +3479,11 @@ def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
         "for writer in (open, safe):\n    writer('secret.txt')\n",
         "with open as writer:\n    writer('secret.txt')\n",
         "def invoke(writer):\n    writer('secret.txt')\ninvoke(open)\n",
+        "def invoke(writer=open):\n    writer('secret.txt')\ninvoke()\n",
+        "def invoke(*writers):\n    writers[0]('secret.txt')\ninvoke(open)\n",
+        "invoke = lambda writer: writer('secret.txt')\ninvoke(open)\n",
+        "invoke(*[open])\n",
+        "runner(open)\n",
         "writers = [open for _ in values]\nwriters[0]('secret.txt')\n",
         "writers = [writer for writer in (open, safe)]\nwriters[0]('secret.txt')\n",
         "[writer('secret.txt') for writer in (open, safe)]\n",
@@ -3236,12 +3523,46 @@ def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
         "loop-target-open-alias",
         "with-target-open-alias",
         "function-parameter-open-alias",
+        "function-default-open-alias",
+        "function-vararg-open-argument",
+        "lambda-parameter-open-argument",
+        "starred-open-call-argument",
+        "unknown-function-open-argument",
         "comprehension-value-subscript-call",
         "comprehension-target-loop-alias",
         "comprehension-call-through-loop-alias",
     ],
 )
 def test_ast_contract_rejects_indirect_module_and_dynamic_access(source):
+    assert ast_contract_violations(source)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "def invoke(writer=open):\n    return writer\n",
+        "invoke = lambda writer=open: writer\n",
+        "def invoke(writer: open):\n    return writer\n",
+        "def invoke(*, writer: open = safe):\n    return writer\n",
+        "def invoke(writer: service.open = safe):\n    return writer\n",
+        "def invoke(writer: frame.f_globals = safe):\n    return writer\n",
+    ],
+)
+def test_ast_contract_rejects_forbidden_function_defaults_and_annotations(source):
+    assert ast_contract_violations(source)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "invoke(service.open)\n",
+        "invoke(sys._getframe().f_globals)\n",
+        "invoke(__builtins__.eval)\n",
+        "invoke(writer=[open])\n",
+        "invoke(**{'writer': open})\n",
+    ],
+)
+def test_ast_contract_rejects_forbidden_expressions_inside_call_arguments(source):
     assert ast_contract_violations(source)
 
 

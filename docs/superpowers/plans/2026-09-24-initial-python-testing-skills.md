@@ -153,10 +153,10 @@ Install globally with the CLI’s `--global` option or target a project director
 
 ## Research and contribution
 
-- [Research](../../research/2026-09-24-python-testing-skills-landscape.md)
-- [Contributing](../../CONTRIBUTING.md)
-- [Security](../../SECURITY.md)
-- [Changelog](../../CHANGELOG.md)
+- [Research](docs/research/2026-09-24-python-testing-skills-landscape.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security](SECURITY.md)
+- [Changelog](CHANGELOG.md)
 ````
 
 - [ ] **Step 3: Add repository-specific agent rules**

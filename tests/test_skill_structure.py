@@ -387,19 +387,30 @@ def _markdown_code_ranges(markdown: str) -> list[tuple[int, int]]:
     ranges: list[tuple[int, int]] = []
     fence: tuple[str, int] | None = None
     fence_start = 0
+    indented_start: int | None = None
     offset = 0
     for line in markdown.splitlines(keepends=True):
-        fence_match = MARKDOWN_FENCE_START.match(line.rstrip("\r\n"))
+        line_text = line.rstrip("\r\n")
+        fence_match = MARKDOWN_FENCE_START.match(line_text)
         if fence is None:
             if fence_match is not None:
+                if indented_start is not None:
+                    ranges.append((indented_start, offset))
+                    indented_start = None
                 fence_token = fence_match.group("fence")
                 fence = (fence_token[0], len(fence_token))
                 fence_start = offset
+            elif line_text.startswith("    "):
+                if indented_start is None:
+                    indented_start = offset
+            elif indented_start is not None and line_text.strip():
+                ranges.append((indented_start, offset))
+                indented_start = None
         else:
             fence_character, minimum_length = fence
             closing_fence = re.fullmatch(
                 rf"[ \t]{{0,3}}{re.escape(fence_character)}{{{minimum_length},}}[ \t]*",
-                line.rstrip("\r\n"),
+                line_text,
             )
             if closing_fence is not None:
                 ranges.append((fence_start, offset + len(line)))
@@ -408,6 +419,8 @@ def _markdown_code_ranges(markdown: str) -> list[tuple[int, int]]:
 
     if fence is not None:
         ranges.append((fence_start, len(markdown)))
+    if indented_start is not None:
+        ranges.append((indented_start, len(markdown)))
 
     for match in INLINE_CODE.finditer(markdown):
         if not any(start <= match.start() < end for start, end in ranges):
@@ -1022,6 +1035,19 @@ def test_markdown_targets_remove_fences_and_inline_code_before_extracting_links(
 
     assert list(markdown_targets(markdown)) == ["references/valid.md"]
     assert list(unresolved_markdown_references(markdown)) == ["definition-in-fence"]
+
+
+def test_markdown_targets_ignore_four_space_indented_code_blocks():
+    markdown = """
+[valid](references/valid.md)
+[missing reference][definition-in-indented-block]
+
+    [missing indented link](references/missing-indented.md)
+    [definition-in-indented-block]: references/indented-definition.md
+"""
+
+    assert list(markdown_targets(markdown)) == ["references/valid.md"]
+    assert list(unresolved_markdown_references(markdown)) == ["definition-in-indented-block"]
 
 
 def test_unresolved_reference_label_is_not_resolved_as_a_sibling_file(tmp_path):
