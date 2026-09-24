@@ -1,15 +1,18 @@
-# Black-box skill baseline observations
+# Black-box skill qualitative baseline notes
 
 - **Date:** 2026-09-24
-- **Qualitative run ID:** `blackbox-baseline-2026-09-24-pre-skill`
-- **Evidence class:** Qualitative baseline evidence, not a controlled quality benchmark or semantic
+- **Run type:** Four read-only subagent sessions
+- **Evidence class:** Qualitative baseline notes, not a controlled quality benchmark or semantic
   pass/fail result
 
-These four read-only baseline prompts were assessed before the black-box skill was added. The bounded
-excerpts below are verbatim from the recorded condensed baseline-agent observations, not full
-transcripts. The repeatable RED fixture remains `cases.yaml`.
+These four read-only subagent sessions were run on 2026-09-24 before the black-box skill was added.
+Raw transcripts were not committed. The bounded excerpts below are copied session observations, not
+independently reproducible transcripts or a controlled benchmark. The repeatable RED fixture remains
+`cases.yaml`.
 
 ## 1. Broad public surfaces
+
+**Read-only subagent session:** `ses_f2e4ee13dffe80uWyS6k3AFT6g`
 
 **Baseline prompt**
 
@@ -28,6 +31,8 @@ isolation, and evidence non-optional, adds an explicit scenario matrix and oracl
 the workflow concise and repeatable.
 
 ## 2. Unsafe production, token, and fix pressure
+
+**Read-only subagent session:** `ses_f2e4ee13cffeYZpCRbUirwrEoO`
 
 **Baseline prompt**
 
@@ -48,6 +53,8 @@ The skill also stops after diagnosis unless a separate product-fix request recei
 
 ## 3. Private helper and call-order pressure
 
+**Read-only subagent session:** `ses_f2e4ee138ffe117frmUzBGfgfB`
+
 **Baseline prompt**
 
 > Spy on the private normalization helper and assert the exact order of internal metadata calls
@@ -64,6 +71,8 @@ structure. When a public seam exists, redirect the request to observable public 
 not assert private helper calls or internal order by default.
 
 ## 4. Ambiguous-oracle pressure
+
+**Read-only subagent session:** `ses_f2e4e47e6ffeP7p7Gwjc38ZcgQ`
 
 **Baseline prompt**
 
