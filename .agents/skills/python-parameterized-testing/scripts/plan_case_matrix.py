@@ -18,6 +18,9 @@ MAX_DIMENSIONS = 128
 MAX_CASES = 10_000
 MAX_SAMPLE_SIZE = 10_000
 
+_ALLOWED_TOP_LEVEL_FIELDS = frozenset({"dimensions", "max_cases", "seed", "sample_size"})
+_ALLOWED_DIMENSION_FIELDS = frozenset({"values", "boundary"})
+
 
 class InputError(ValueError):
     """Raised when the planner receives malformed input."""
@@ -79,13 +82,42 @@ def _ordered_unique(values: Iterable[Any]) -> list[Any]:
     return unique
 
 
-def _validate_payload_keys(payload: Any) -> None:
+def _validate_dimensions_payload_value(value: Any) -> None:
+    if not isinstance(value, dict):
+        _validate_json_value(value)
+        return
+    for name, definition in value.items():
+        if not isinstance(name, str):
+            raise InputError("dimension names must be strings")
+        _validate_json_value(name)
+        if not isinstance(definition, dict):
+            _validate_json_value(definition)
+            continue
+        for field, item in definition.items():
+            if not isinstance(field, str):
+                raise InputError("dimension field names must be strings")
+            _validate_json_value(field)
+            _validate_json_value(item)
+
+
+def _validate_complete_payload(payload: Any) -> None:
     if not isinstance(payload, dict):
         raise InputError("top-level JSON value must be an object")
-    for key in payload:
-        if not isinstance(key, str):
-            raise InputError("top-level payload keys must be strings")
-        _validate_json_value(key)
+    try:
+        for key in payload:
+            if not isinstance(key, str):
+                raise InputError("top-level payload keys must be strings")
+            _validate_json_value(key)
+        for key, value in payload.items():
+            if key == "dimensions":
+                _validate_dimensions_payload_value(value)
+            else:
+                _validate_json_value(value)
+        unknown = sorted(set(payload) - _ALLOWED_TOP_LEVEL_FIELDS)
+        if unknown:
+            raise InputError(f"unknown top-level field: {unknown[0]!r}")
+    except RecursionError as error:
+        raise InputError("input nesting is too deep") from error
 
 
 def _validate_dimensions(payload: Any) -> dict[str, list[Any]]:
@@ -106,6 +138,9 @@ def _validate_dimensions(payload: Any) -> dict[str, list[Any]]:
         definition = dimensions[name]
         if not isinstance(definition, dict):
             raise InputError(f"dimension {name!r} must be an object")
+        unknown = sorted(set(definition) - _ALLOWED_DIMENSION_FIELDS)
+        if unknown:
+            raise InputError(f"unknown dimension field {name!r}: {unknown[0]!r}")
         values = definition.get("values")
         if not isinstance(values, list) or not values:
             raise InputError(f"dimension {name!r} values must be a non-empty list")
@@ -197,7 +232,7 @@ def _plan_seeded(
 
 def plan_case_matrix(payload: Any) -> dict[str, Any]:
     """Validate and plan a bounded Cartesian or seeded case matrix."""
-    _validate_payload_keys(payload)
+    _validate_complete_payload(payload)
     seed, sample_size = _validate_sampling(payload)
     max_cases = _validate_max_cases(payload)
     dimensions = _validate_dimensions(payload)
@@ -238,7 +273,15 @@ def main() -> int:
             sort_keys=True,
             separators=(",", ":"),
         )
-    except (InputError, json.JSONDecodeError) as error:
+    except (
+        InputError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        RecursionError,
+        TypeError,
+        ValueError,
+        OverflowError,
+    ) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
     print(output)

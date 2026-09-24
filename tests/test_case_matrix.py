@@ -141,6 +141,31 @@ def test_plan_case_matrix_rejects_non_finite_json(constant):
     assert len(result.stderr) < 200
 
 
+def test_plan_case_matrix_rejects_invalid_utf8_stdin():
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT)],
+        input=b"\xff",
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == b""
+    assert result.stderr.startswith(b"error:")
+    assert b"Traceback" not in result.stderr
+
+
+def test_plan_case_matrix_rejects_excessive_json_depth():
+    input_text = "[" * 2_000 + "0" + "]" * 2_000
+
+    result = run_helper_text(input_text)
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr.startswith("error:")
+    assert "Traceback" not in result.stderr
+
+
 def test_plan_case_matrix_rejects_malformed_max_cases_with_exact_error():
     result = run_helper_text('{"dimensions": {"n": {"values": [1]}}, "max_cases": 0}')
 
@@ -216,6 +241,83 @@ def test_plan_case_matrix_rejects_surrogate_object_key_through_subprocess():
     assert result.stdout == ""
     assert result.stderr.startswith("error:")
     assert "surrogate" in result.stderr.lower()
+
+
+def test_plan_case_matrix_rejects_surrogate_unknown_top_level_field_through_api():
+    with pytest.raises(HELPER.InputError, match="surrogate"):
+        HELPER.plan_case_matrix(
+            {
+                "dimensions": {"n": {"values": [1]}},
+                "max_cases": 1,
+                "metadata": {"\ud800": 1},
+            }
+        )
+
+
+def test_plan_case_matrix_rejects_surrogate_unknown_top_level_field_through_subprocess():
+    input_text = json.dumps(
+        {
+            "dimensions": {"n": {"values": [1]}},
+            "max_cases": 1,
+            "metadata": {"\ud800": 1},
+        },
+        ensure_ascii=True,
+    )
+
+    result = run_helper_text(input_text)
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr.startswith("error:")
+    assert "surrogate" in result.stderr.lower()
+    assert "Traceback" not in result.stderr
+
+
+def test_plan_case_matrix_rejects_surrogate_unknown_dimension_field_through_api():
+    with pytest.raises(HELPER.InputError, match="surrogate"):
+        HELPER.plan_case_matrix(
+            {
+                "dimensions": {"n": {"values": [1], "metadata": "\ud800"}},
+                "max_cases": 1,
+            }
+        )
+
+
+def test_plan_case_matrix_rejects_surrogate_unknown_dimension_field_through_subprocess():
+    input_text = json.dumps(
+        {
+            "dimensions": {"n": {"values": [1], "metadata": "\ud800"}},
+            "max_cases": 1,
+        },
+        ensure_ascii=True,
+    )
+
+    result = run_helper_text(input_text)
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr.startswith("error:")
+    assert "surrogate" in result.stderr.lower()
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "dimensions": {"n": {"values": [1]}},
+            "max_cases": 1,
+            "metadata": {},
+        },
+        {
+            "dimensions": {"n": {"values": [1], "metadata": {}}},
+            "max_cases": 1,
+        },
+    ],
+)
+def test_plan_case_matrix_rejects_unknown_schema_fields(payload):
+    with pytest.raises(HELPER.InputError, match="unknown"):
+        HELPER.plan_case_matrix(payload)
 
 
 def test_plan_case_matrix_requires_string_top_level_keys():
