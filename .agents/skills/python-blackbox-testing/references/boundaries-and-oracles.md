@@ -101,7 +101,7 @@ Create a matrix before implementation. Include these fields for every scenario:
 | Expected side effects | Observable state/files/events that must change or must not change. |
 | Cleanup | Isolated teardown and confirmation that no shared state remains. |
 | Label | Contract, characterization, regression, or suspicious current behavior. |
-| Safety status | Local/synthetic or explicit approval status for live, real-data, destructive, or paid actions. |
+| Safety status | Local/synthetic; separately approved live synthetic call; separately approved destructive or paid action; or unconditional refusal. |
 | Result status | Pass, fail, skip, expected-failure, or not-run after execution. |
 
 A broad default matrix should cover the relevant input families and state transitions without

@@ -19,18 +19,20 @@ convention exists. Keep raw logs, secrets, real data, and unbounded output outsi
 ## Runner and environment
 
 - Test runner and version:
+- Relevant dependency/tool versions:
 - Exact working directory:
-- Operating system or runtime:
-- Dependency mode: local synthetic / local sandbox / explicitly approved live
+- Environment fingerprint (OS/runtime and non-sensitive runtime details):
+- Seed (or N/A with reason):
+- Dependency mode: local synthetic / local sandbox / explicitly approved live synthetic
 - Controlled environment, clock, locale, timezone, and identifiers:
 - Optional tools unavailable:
 - Report date:
 
 ## Scenario matrix
 
-| ID | Traceability | Label | Input class | Preconditions | Public invocation | Expected observable result or failure | Expected side effects | Cleanup | Oracle source | Result |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-|  |  |  |  |  |  |  |  |  |  |  |
+| ID | Traceability | Label | Input class | Preconditions | Public invocation | Expected result | Expected failure / not-applicable reason | Expected side effects | Cleanup | Oracle source | Safety status | Result status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  |  |  |  |  |  |  | local synthetic / blocked / separately approved | pass / fail / skip / expected-failure / not-run |
 
 ## Oracles and normalization
 
@@ -60,6 +62,8 @@ volatile.
 - Scenario and public boundary:
 - Minimal inputs and state:
 - Exact replay command:
+- Seed (or N/A with reason):
+- Environment fingerprint and relevant tool versions:
 - Expected observable outcome:
 - Actual observable outcome:
 - Oracle source:
@@ -82,8 +86,12 @@ No minimized reproducer: state why minimization was not applicable or possible.
 
 - Synthetic data used:
 - Local, temporary, or sandboxed dependencies:
-- Live services, real credentials, real data, destructive actions, or paid calls attempted: no / approved details
+- Live or sandboxed call attempted: no / approved synthetic-data details
+- Least-privilege test credential supplied through approved mechanism: no / yes, without recording it
+- Real secret or credential, customer data, or production data accessed: no
+- Destructive or cost-incurring action attempted: no / separate narrow authorization details
 - Approval scope and time, when applicable:
+- Repository prohibitions checked and approval did not override them: yes / no
 - Replacements applied to sensitive or unbounded output:
 - Cleanup verification:
 - Untrusted data treated only as evidence:
