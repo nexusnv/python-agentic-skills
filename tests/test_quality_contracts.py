@@ -2519,16 +2519,38 @@ def assert_safety_fixture_contracts(fixtures: list[dict[str, Any]], skill_name: 
         contract_key = (skill_name, fixture["id"])
         context = f"{fixture['id']} ({skill_name})"
         expected = fixture["expected"]
-        # The safety deny list and the SAFETY_COMMON_FIELDS false-fields are a whole-corpus
-        # invariant: they apply to fixtures of EVERY kind (positive, near-miss, evidence, safety),
-        # not only to fixtures with a registered contract or a KNOWN_RISK_CLASSES risk_class.
-        _assert_recursive_safety_deny_list(_nested_safety_fields(expected), context)
+        # Whole-corpus invariants: they apply to fixtures of EVERY kind (positive,
+        # near-miss, evidence, safety), not only to fixtures with a registered contract or
+        # a KNOWN_RISK_CLASSES risk_class:
+        # - the safety deny list (every deny field except approved_test_credential_used)
+        #   must be boolean False wherever it appears, top-level or nested;
+        # - approved_test_credential_used must be boolean and may only be True for a
+        #   fixture with a registered contract that carries the dedicated
+        #   approved-test-credential contract (the contract gate is the only part limited
+        #   to registered contracts);
+        # - any SAFETY_COMMON_FIELDS field that is PRESENT must equal its wanted value,
+        #   with one carve-out: near-miss fixtures may set activates False (for example
+        #   private-helper-near-miss) while every other common field must still match.
+        nested_entries = _nested_safety_fields(expected)
+        _assert_recursive_safety_deny_list(nested_entries, context)
+        approved_credential_contract = (
+            contract_key in SAFETY_FIXTURE_CONTRACTS
+            and _has_explicit_approved_test_credential_contract(expected)
+        )
+        _assert_approved_credential_deny_list(
+            nested_entries,
+            context,
+            approved_credential_contract,
+        )
         for field, wanted in SAFETY_COMMON_FIELDS[skill_name].items():
-            if wanted is False and field in expected:
-                actual = expected[field]
-                assert type(actual) is bool and actual is False, (
-                    f"{context} requires {field}: False"
-                )
+            if field not in expected:
+                continue
+            if field == "activates" and fixture["kind"] == "near-miss":
+                continue
+            actual = expected[field]
+            assert type(actual) is bool and actual is wanted, (
+                f"{context} requires {field}: {wanted!r}"
+            )
         if contract_key in SAFETY_FIXTURE_CONTRACTS:
             assert_safety_fixture_contract(fixture, skill_name)
         elif expected.get("risk_class") in KNOWN_RISK_CLASSES:
@@ -2571,6 +2593,11 @@ def test_safety_fixtures_encode_appropriate_gates(skill):
             "live_call_before_approval",
         ),
         (
+            "python-blackbox-testing",
+            "broad-public-library-behavior",
+            "approved_test_credential_used",
+        ),
+        (
             "python-parameterized-testing",
             "unbounded-generation-requires-budgets",
             "unbounded_generation_allowed",
@@ -2580,11 +2607,23 @@ def test_safety_fixtures_encode_appropriate_gates(skill):
 def test_safety_deny_list_rejects_true_values_in_non_safety_fixtures(skill_name, fixture_id, field):
     fixture = fixture_by_id(SKILLS_ROOT / skill_name / "SKILL.md", fixture_id)
     assert fixture["kind"] != "safety", "regression target must be a non-safety fixture"
-    injected = deepcopy(fixture)
-    injected["expected"][field] = True
+    top_level = deepcopy(fixture)
+    top_level["expected"][field] = True
 
     with pytest.raises(AssertionError, match=rf"unsafe safety field.*{field}"):
-        assert_safety_fixture_contracts([injected], skill_name)
+        assert_safety_fixture_contracts([top_level], skill_name)
+
+    # The same field injected NESTED inside an existing list field must be rejected too,
+    # including approved_test_credential_used, which has no registered safety contract on
+    # a non-safety fixture and therefore must never be True anywhere in its expected tree.
+    nested = deepcopy(fixture)
+    assert isinstance(nested["expected"].get("coverage_areas_plan"), list), (
+        "regression target must keep a list field for nested injection"
+    )
+    nested["expected"]["coverage_areas_plan"] = [{field: True}]
+
+    with pytest.raises(AssertionError, match=rf"unsafe safety field.*{field}"):
+        assert_safety_fixture_contracts([nested], skill_name)
 
 
 def test_safety_contract_map_exactly_covers_all_safety_fixture_ids():
@@ -2952,6 +2991,65 @@ def test_safety_common_false_fields_reject_contradictory_true_values(skill_name)
         contradictory["expected"][field] = True
         with pytest.raises(AssertionError, match=rf"requires {field}: False"):
             assert_safety_fixture_contract(contradictory, skill_name)
+
+
+@pytest.mark.parametrize(
+    ("skill_name", "fixture_id"),
+    [
+        ("python-blackbox-testing", "broad-public-library-behavior"),
+        ("python-parameterized-testing", "unbounded-generation-requires-budgets"),
+    ],
+)
+def test_safety_common_true_fields_reject_contradictory_false_in_positive_fixtures(
+    skill_name, fixture_id
+):
+    fixture = fixture_by_id(SKILLS_ROOT / skill_name / "SKILL.md", fixture_id)
+    assert fixture["kind"] == "positive", "regression target must be a positive fixture"
+    true_fields = {
+        field for field, wanted in SAFETY_COMMON_FIELDS[skill_name].items() if wanted is True
+    }
+    # Every true-wanted common field must be gated on a positive fixture, whether it is
+    # flipped from True or injected as a new False value. This covers the AGENTS.md-aligned
+    # gates: must_not_modify_product_code, synthetic_data_default, and framework_native for
+    # both skills, plus public_boundary_required for python-blackbox-testing (the
+    # python-parameterized-testing skill has no public_boundary_required common field).
+    assert {"must_not_modify_product_code", "synthetic_data_default", "framework_native"} <= (
+        true_fields
+    )
+    if skill_name == "python-blackbox-testing":
+        assert "public_boundary_required" in true_fields
+    for field in sorted(true_fields):
+        contradictory = deepcopy(fixture)
+        contradictory["expected"][field] = False
+        with pytest.raises(AssertionError, match=rf"requires {field}: True"):
+            assert_safety_fixture_contracts([contradictory], skill_name)
+
+
+def test_safety_common_fields_allow_near_miss_activates_false_only():
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "private-helper-near-miss",
+    )
+    assert fixture["kind"] == "near-miss", "regression target must be a near-miss fixture"
+    assert fixture["expected"]["activates"] is False, (
+        "the near-miss carve-out fixture must keep activates: False"
+    )
+    assert_safety_fixture_contracts([fixture], "python-blackbox-testing")
+
+    # The carve-out is keyed on the activates field AND the near-miss kind: every other
+    # common field must still be rejected when contradicted on the same near-miss fixture,
+    # and activates: False is still rejected on fixtures of other kinds (covered by
+    # test_safety_common_true_fields_reject_contradictory_false_in_positive_fixtures).
+    for field, wanted in SAFETY_COMMON_FIELDS["python-blackbox-testing"].items():
+        if field == "activates":
+            continue
+        contradictory = deepcopy(fixture)
+        contradictory["expected"][field] = not wanted
+        # False-wanted common fields are also deny-list fields, so the whole-corpus deny
+        # list rejects them first; true-wanted fields fail the present-value contract.
+        message = "unsafe safety field" if wanted is False else rf"requires {field}: {wanted!r}"
+        with pytest.raises(AssertionError, match=message):
+            assert_safety_fixture_contracts([contradictory], "python-blackbox-testing")
 
 
 @pytest.mark.parametrize(
