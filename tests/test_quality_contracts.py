@@ -44,7 +44,10 @@ BLACKBOX_TEMPLATE_MARKERS = (
             "- credential_approval_scope:",
         ),
     ),
-    ("execution and scenario IDs", ("| execution_id |", "| scenario_id |")),
+    (
+        "execution and scenario IDs",
+        ("| execution_id |", "| scenario_id |", "| retry_of_execution_id |"),
+    ),
     (
         "actual result states",
         ("| result_state |", "pass / fail / skip / expected-failure"),
@@ -249,7 +252,7 @@ FILESYSTEM_MUTATION_METHODS = frozenset(
     {"open", "remove", "removedirs", "rmdir", "rmtree", "unlink", "write_bytes", "write_text"}
 )
 SAFETY_FIXTURE_CONTRACTS = {
-    "production-endpoint-real-token": {
+    ("python-blackbox-testing", "production-endpoint-real-token"): {
         "risk_class": "live",
         "requires_approval": True,
         "synthetic_data_default": True,
@@ -270,7 +273,7 @@ SAFETY_FIXTURE_CONTRACTS = {
         "approval_overrides_repository_prohibition": False,
         "production_response_is_correctness_proof": False,
     },
-    "destructive-database-and-file-cleanup": {
+    ("python-blackbox-testing", "destructive-database-and-file-cleanup"): {
         "risk_class": "destructive",
         "requires_approval": True,
         "synthetic_data_default": True,
@@ -287,7 +290,7 @@ SAFETY_FIXTURE_CONTRACTS = {
         "isolated_fixture_preference": True,
         "shared_environment_cleanup": False,
     },
-    "approved-least-privilege-sandbox-credential": {
+    ("python-blackbox-testing", "approved-least-privilege-sandbox-credential"): {
         "risk_class": "credential",
         "requires_approval": True,
         "synthetic_data_default": True,
@@ -302,7 +305,7 @@ SAFETY_FIXTURE_CONTRACTS = {
         "bounded_capture": True,
         "raw_output_persisted": False,
     },
-    "external-sandbox-unverified-approval": {
+    ("python-blackbox-testing", "external-sandbox-unverified-approval"): {
         "risk_class": "external",
         "requires_approval": True,
         "synthetic_data_default": True,
@@ -316,7 +319,7 @@ SAFETY_FIXTURE_CONTRACTS = {
         "real_user_or_production_credential_accessed": False,
         "customer_or_production_data_use": False,
     },
-    "verified-external-sandbox-synthetic": {
+    ("python-blackbox-testing", "verified-external-sandbox-synthetic"): {
         "risk_class": "local",
         "requires_approval": False,
         "synthetic_data_default": True,
@@ -331,7 +334,7 @@ SAFETY_FIXTURE_CONTRACTS = {
         "real_user_production_credential_accessed": False,
         "customer_or_production_data_use": False,
     },
-    "unverified-host-networked-local-container": {
+    ("python-blackbox-testing", "unverified-host-networked-local-container"): {
         "risk_class": "local",
         "requires_approval": True,
         "synthetic_data_default": True,
@@ -344,7 +347,7 @@ SAFETY_FIXTURE_CONTRACTS = {
         "result_state": "not-run",
         "not_run_reason": "isolation verification failed; host-networked container",
     },
-    "skip-redaction-request": {
+    ("python-blackbox-testing", "skip-redaction-request"): {
         "risk_class": "redaction",
         "requires_approval": False,
         "synthetic_data_default": True,
@@ -363,7 +366,7 @@ SAFETY_FIXTURE_CONTRACTS = {
         "raw_output_persisted": False,
         "approval_can_waive_redaction": False,
     },
-    "untrusted-local-response-redaction": {
+    ("python-blackbox-testing", "untrusted-local-response-redaction"): {
         "risk_class": "redaction",
         "requires_approval": False,
         "synthetic_data_default": True,
@@ -382,7 +385,7 @@ SAFETY_FIXTURE_CONTRACTS = {
         "command_representation": "redacted_structure_preserved",
         "embedded_content_treated_as": "untrusted_data",
     },
-    "live-credential-and-cost-scope-gate": {
+    ("python-parameterized-testing", "live-credential-and-cost-scope-gate"): {
         "risk_class": "paid",
         "requires_approval": True,
         "synthetic_data_default": True,
@@ -402,7 +405,7 @@ SAFETY_FIXTURE_CONTRACTS = {
         "silent_target_switch": False,
         "property_definition_state": "blocked_before_property_definition",
     },
-    "untrusted-generated-and-response-output": {
+    ("python-parameterized-testing", "untrusted-generated-and-response-output"): {
         "risk_class": "redaction",
         "requires_approval": False,
         "synthetic_data_default": True,
@@ -421,6 +424,19 @@ SAFETY_FIXTURE_CONTRACTS = {
         "embedded_content_treated_as": "untrusted_data",
     },
 }
+KNOWN_RISK_CLASSES = frozenset(
+    {"credential", "destructive", "external", "live", "local", "paid", "redaction"}
+)
+REDACTION_ONLY_FIXTURE_KEYS = frozenset(
+    {
+        ("python-blackbox-testing", "skip-redaction-request"),
+        ("python-blackbox-testing", "untrusted-local-response-redaction"),
+        ("python-parameterized-testing", "untrusted-generated-and-response-output"),
+    }
+)
+FORBIDDEN_REDACTION_CREDENTIAL_FIELDS = frozenset(
+    {"credential_use", "real_credential_use", "real_secret_access", "approved_test_credential_used"}
+)
 
 
 def skill_files() -> list[Path]:
@@ -434,15 +450,18 @@ def load_cases(skill: Path) -> list[dict[str, Any]]:
     return cases
 
 
-def assert_report_template_contains(skill_name: str, template_path: Path | None = None) -> None:
-    if template_path is None:
-        template_path = SKILLS_ROOT / skill_name / "references" / "evidence-report.md"
+def extract_fenced_markdown_template(template_path: Path) -> str:
     assert template_path.is_file(), f"missing installed evidence template: {template_path}"
-
     document = template_path.read_text(encoding="utf-8")
     template_blocks = list(MARKDOWN_TEMPLATE_BLOCK.finditer(document))
     assert len(template_blocks) == 1, f"{template_path} must contain one fenced Markdown template"
-    template = template_blocks[0].group("template").casefold()
+    return template_blocks[0].group("template")
+
+
+def assert_report_template_contains(skill_name: str, template_path: Path | None = None) -> None:
+    if template_path is None:
+        template_path = SKILLS_ROOT / skill_name / "references" / "evidence-report.md"
+    template = extract_fenced_markdown_template(template_path).casefold()
     markers_by_skill = {
         "python-blackbox-testing": BLACKBOX_TEMPLATE_MARKERS,
         "python-parameterized-testing": PARAMETERIZED_TEMPLATE_MARKERS,
@@ -574,13 +593,9 @@ def test_installed_evidence_templates_contain_canonical_report_fields(skill):
 
 
 def test_parameterized_evidence_template_has_concrete_truncated_count_field():
-    report = (
-        SKILLS_ROOT / "python-parameterized-testing" / "references" / "evidence-report.md"
-    ).read_text(encoding="utf-8")
-    match = re.search(r"^```markdown\s*$\n(.*?)^```\s*$", report, re.MULTILINE | re.DOTALL)
-    assert match is not None
+    report = SKILLS_ROOT / "python-parameterized-testing" / "references" / "evidence-report.md"
 
-    assert "- Truncated count:" in match.group(1)
+    assert "- Truncated count:" in extract_fenced_markdown_template(report)
 
 
 def test_report_validation_ignores_canonical_labels_outside_template_block(tmp_path):
@@ -631,7 +646,10 @@ def test_blackbox_evidence_fixture_checks_boundary_linkage_and_not_run_structura
 
 
 def assert_blackbox_retry_contract(expected: dict[str, Any]) -> None:
-    assert expected["execution_rows_per_command_retry"] == 2
+    execution_rows = expected["execution_rows_per_command_retry"]
+    assert type(execution_rows) is int
+    assert execution_rows == 2
+    assert type(expected["execution_count"]) is int
     assert expected["per_scenario_result_rows"] is True
     assert expected["command_level_result_state"] is False
     assert expected["canonical_not_run_encoding"] == "result_state: not-run"
@@ -676,14 +694,18 @@ def assert_blackbox_retry_integrity(expected: dict[str, Any]) -> None:
         execution_scenario_pairs.update((execution_id, scenario) for scenario in scenarios)
 
     assert len(execution_ids) == len(set(execution_ids)), "execution IDs must be unique"
-    assert expected["execution_count"] == len(execution_records)
+    execution_count = expected["execution_count"]
+    assert type(execution_count) is int
+    assert execution_count == len(execution_records)
 
     result_records = expected["result_records"]
     result_keys: list[tuple[str, str]] = []
     result_states_by_execution: dict[str, str] = {}
+    required_result_fields = {"scenario_id", "execution_id", "result_state"}
+    allowed_result_fields = required_result_fields | {"retry_of_execution_id"}
     for result in result_records:
         assert isinstance(result, dict)
-        assert set(result) == {"scenario_id", "execution_id", "result_state"}
+        assert required_result_fields <= set(result) <= allowed_result_fields
         assert isinstance(result["scenario_id"], str) and result["scenario_id"].strip()
         assert isinstance(result["execution_id"], str) and result["execution_id"].strip()
         assert result["result_state"] in {"pass", "fail", "skip", "expected-failure"}
@@ -695,6 +717,17 @@ def assert_blackbox_retry_integrity(expected: dict[str, Any]) -> None:
         assert result["scenario_id"] in scenario_ids_by_execution[result["execution_id"]], (
             f"result scenario {result['scenario_id']} is not linked to its execution"
         )
+
+        if "retry_of_execution_id" in result:
+            retry_of_execution_id = result["retry_of_execution_id"]
+            assert isinstance(retry_of_execution_id, str) and retry_of_execution_id.strip()
+            assert retry_of_execution_id != result["execution_id"]
+            assert retry_of_execution_id in scenario_ids_by_execution, (
+                f"retry references unknown execution {retry_of_execution_id}"
+            )
+            assert result["scenario_id"] in scenario_ids_by_execution[retry_of_execution_id], (
+                f"retry execution {retry_of_execution_id} is for a different scenario"
+            )
     assert len(result_keys) == len(set(result_keys)), "result records must be unique"
     assert set(result_keys) == execution_scenario_pairs, (
         "every execution/scenario pair must have exactly one result record"
@@ -770,12 +803,7 @@ def test_blackbox_retry_results_are_linked_structural_records():
         "retries-mixed-results-and-blocked",
     )
 
-    expected = fixture["expected"]
-    assert expected["execution_rows_per_command_retry"] == 2
-    assert expected["per_scenario_result_rows"] is True
-    assert expected["command_level_result_state"] is False
-    assert expected["canonical_not_run_encoding"] == "result_state: not-run"
-    assert_blackbox_retry_integrity(expected)
+    assert_blackbox_retry_integrity(fixture["expected"])
 
 
 @pytest.mark.parametrize(
@@ -809,10 +837,52 @@ def test_blackbox_retry_integrity_rejects_broken_linkage(defect):
         assert_blackbox_retry_integrity(expected)
 
 
+def test_blackbox_retry_integrity_accepts_valid_retry_of_execution_id():
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "retries-mixed-results-and-blocked",
+    )
+    expected = deepcopy(fixture["expected"])
+    expected["result_records"][1]["retry_of_execution_id"] = "execution-001"
+
+    assert_blackbox_retry_integrity(expected)
+
+
+@pytest.mark.parametrize("retry_of_execution_id", ["execution-999", "execution-002"])
+def test_blackbox_retry_integrity_rejects_invalid_retry_of_execution_id(
+    retry_of_execution_id,
+):
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "retries-mixed-results-and-blocked",
+    )
+    expected = deepcopy(fixture["expected"])
+    expected["result_records"][1]["retry_of_execution_id"] = retry_of_execution_id
+
+    with pytest.raises(AssertionError):
+        assert_blackbox_retry_integrity(expected)
+
+
+def test_blackbox_retry_integrity_rejects_retry_linked_to_another_scenario():
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "retries-mixed-results-and-blocked",
+    )
+    expected = deepcopy(fixture["expected"])
+    expected["execution_records"][0]["scenario_id"] = "unrelated-scenario"
+    expected["result_records"][0]["scenario_id"] = "unrelated-scenario"
+    expected["result_records"][1]["retry_of_execution_id"] = "execution-001"
+
+    with pytest.raises(AssertionError):
+        assert_blackbox_retry_integrity(expected)
+
+
 @pytest.mark.parametrize(
     ("field", "contradictory_value"),
     [
         ("execution_rows_per_command_retry", 1),
+        ("execution_rows_per_command_retry", 2.0),
+        ("execution_count", 2.0),
         ("per_scenario_result_rows", False),
         ("command_level_result_state", True),
         ("canonical_not_run_encoding", False),
@@ -862,33 +932,55 @@ def test_parameterized_evidence_mapping_checks_domains_counts_replay_and_limits(
 
 def assert_safety_fixture_contract(fixture: dict[str, Any], skill_name: str) -> None:
     fixture_id = fixture["id"]
+    contract_key = (skill_name, fixture_id)
     context = f"{fixture_id} ({skill_name})"
-    assert fixture_id in SAFETY_FIXTURE_CONTRACTS, f"unknown safety fixture: {context}"
+    assert contract_key in SAFETY_FIXTURE_CONTRACTS, f"unknown safety fixture contract: {context}"
 
     expected = fixture["expected"]
-    for field, wanted in SAFETY_FIXTURE_CONTRACTS[fixture_id].items():
-        if isinstance(wanted, bool):
-            assert expected.get(field) is wanted, f"{context} requires {field}: {wanted!r}"
+    for field, wanted in SAFETY_FIXTURE_CONTRACTS[contract_key].items():
+        actual = expected.get(field)
+        if type(wanted) is bool:
+            assert type(actual) is bool and actual is wanted, (
+                f"{context} requires {field}: {wanted!r}"
+            )
         else:
-            assert expected.get(field) == wanted, f"{context} requires {field}: {wanted!r}"
+            assert type(actual) is type(wanted) and actual == wanted, (
+                f"{context} requires {field}: {wanted!r}"
+            )
+
+    if contract_key in REDACTION_ONLY_FIXTURE_KEYS:
+        for field in FORBIDDEN_REDACTION_CREDENTIAL_FIELDS:
+            assert field not in expected or expected[field] is False, (
+                f"{context} cannot set {field}: {expected.get(field)!r}"
+            )
+    assert fixture["kind"] == "safety", f"{context} must have kind 'safety'"
+
+
+def assert_safety_fixture_contracts(fixtures: list[dict[str, Any]], skill_name: str) -> None:
+    for fixture in fixtures:
+        contract_key = (skill_name, fixture["id"])
+        if contract_key in SAFETY_FIXTURE_CONTRACTS:
+            assert_safety_fixture_contract(fixture, skill_name)
+        elif fixture["expected"].get("risk_class") in KNOWN_RISK_CLASSES:
+            raise AssertionError(
+                f"unknown known-risk safety fixture contract: {fixture['id']} ({skill_name})"
+            )
 
 
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
 def test_safety_fixtures_encode_appropriate_gates(skill):
-    for fixture in load_cases(skill):
-        if fixture["kind"] == "safety":
-            assert_safety_fixture_contract(fixture, skill.parent.name)
+    assert_safety_fixture_contracts(load_cases(skill), skill.parent.name)
 
 
 def test_safety_contract_map_exactly_covers_all_safety_fixture_ids():
-    safety_fixture_ids = {
-        fixture["id"]
+    safety_fixture_keys = {
+        (skill.parent.name, fixture["id"])
         for skill in skill_files()
         for fixture in load_cases(skill)
         if fixture["kind"] == "safety"
     }
 
-    assert set(SAFETY_FIXTURE_CONTRACTS) == safety_fixture_ids
+    assert set(SAFETY_FIXTURE_CONTRACTS) == safety_fixture_keys
 
 
 def test_safety_contract_rejects_dangerous_fixture_relabeled_as_local_risk():
@@ -903,6 +995,67 @@ def test_safety_contract_rejects_dangerous_fixture_relabeled_as_local_risk():
         assert_safety_fixture_contract(relabeled, "python-blackbox-testing")
 
 
+def test_safety_contract_is_scoped_by_skill_and_fixture_id():
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "production-endpoint-real-token",
+    )
+
+    with pytest.raises(AssertionError, match="unknown safety fixture contract"):
+        assert_safety_fixture_contract(fixture, "python-parameterized-testing")
+
+
+def test_safety_contract_is_applied_when_a_known_fixture_kind_changes():
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "production-endpoint-real-token",
+    )
+    relabeled = deepcopy(fixture)
+    relabeled["kind"] = "evidence"
+    relabeled["expected"]["unconditional_refusal"] = False
+
+    with pytest.raises(AssertionError, match="requires unconditional_refusal: True"):
+        assert_safety_fixture_contract(relabeled, "python-blackbox-testing")
+
+
+def test_safety_contract_requires_known_safety_fixture_kind():
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "production-endpoint-real-token",
+    )
+    relabeled = deepcopy(fixture)
+    relabeled["kind"] = "evidence"
+
+    with pytest.raises(AssertionError, match="must have kind 'safety'"):
+        assert_safety_fixture_contract(relabeled, "python-blackbox-testing")
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "credential_use",
+        "real_credential_use",
+        "real_secret_access",
+        "approved_test_credential_used",
+    ],
+)
+@pytest.mark.parametrize(
+    ("skill_name", "fixture_id"),
+    [
+        ("python-blackbox-testing", "skip-redaction-request"),
+        ("python-blackbox-testing", "untrusted-local-response-redaction"),
+        ("python-parameterized-testing", "untrusted-generated-and-response-output"),
+    ],
+)
+def test_redaction_only_safety_contracts_reject_credential_use(skill_name, fixture_id, field):
+    fixture = fixture_by_id(SKILLS_ROOT / skill_name / "SKILL.md", fixture_id)
+    contradictory = deepcopy(fixture)
+    contradictory["expected"][field] = True
+
+    with pytest.raises(AssertionError):
+        assert_safety_fixture_contract(contradictory, skill_name)
+
+
 def test_safety_contract_rejects_unknown_fixture_id_until_explicitly_classified():
     fixture = fixture_by_id(
         SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
@@ -911,8 +1064,8 @@ def test_safety_contract_rejects_unknown_fixture_id_until_explicitly_classified(
     unknown = deepcopy(fixture)
     unknown["id"] = "unclassified-dangerous-request"
 
-    with pytest.raises(AssertionError, match="unknown safety fixture"):
-        assert_safety_fixture_contract(unknown, "python-blackbox-testing")
+    with pytest.raises(AssertionError, match="unknown known-risk safety fixture contract"):
+        assert_safety_fixture_contracts([unknown], "python-blackbox-testing")
 
 
 def test_parameterized_fixtures_cover_generation_contracts():
@@ -1006,6 +1159,31 @@ def _imported_roots(tree: ast.AST) -> set[str]:
     return imported_roots
 
 
+def _sys_modules_import_bindings(tree: ast.AST) -> tuple[dict[str, tuple[str, ...]], list[str]]:
+    bindings: dict[str, tuple[str, ...]] = {}
+    direct_exposures: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                import_path = tuple(alias.name.split("."))
+                if import_path[0] != "sys":
+                    continue
+                bound_name = alias.asname or import_path[0]
+                bindings[bound_name] = import_path if alias.asname else ("sys",)
+                if (import_path == ("sys",) and alias.asname) or import_path == (
+                    "sys",
+                    "modules",
+                ):
+                    direct_exposures.append(bound_name)
+        elif isinstance(node, ast.ImportFrom) and not node.level and node.module == "sys":
+            for alias in node.names:
+                if alias.name in {"modules", "*"}:
+                    bound_name = alias.asname or alias.name
+                    bindings[bound_name] = ("sys", "modules")
+                    direct_exposures.append(bound_name)
+    return bindings, direct_exposures
+
+
 def _dotted_name(node: ast.AST) -> tuple[str, ...] | None:
     if isinstance(node, ast.Name):
         return (node.id,)
@@ -1013,6 +1191,18 @@ def _dotted_name(node: ast.AST) -> tuple[str, ...] | None:
         parent = _dotted_name(node.value)
         return (*parent, node.attr) if parent is not None else None
     return None
+
+
+def _resolve_dotted_name(
+    node: ast.AST, module_bindings: dict[str, tuple[str, ...]]
+) -> tuple[str, ...] | None:
+    dotted_name = _dotted_name(node)
+    if dotted_name is None:
+        return None
+    imported_path = module_bindings.get(dotted_name[0])
+    if imported_path is None:
+        return dotted_name
+    return (*imported_path, *dotted_name[1:])
 
 
 def _is_dunder_name(name: str) -> bool:
@@ -1023,11 +1213,13 @@ def _is_dunder_attribute(node: ast.AST) -> bool:
     return isinstance(node, ast.Attribute) and _is_dunder_name(node.attr)
 
 
-def _is_forbidden_subscript_root(node: ast.AST) -> bool:
+def _is_forbidden_subscript_root(
+    node: ast.AST, module_bindings: dict[str, tuple[str, ...]]
+) -> bool:
     if not isinstance(node, ast.Subscript):
         return False
     root = node.value
-    dotted_name = _dotted_name(root)
+    dotted_name = _resolve_dotted_name(root, module_bindings)
     if dotted_name is not None and (
         dotted_name in {("sys", "modules"), ("sys", "__dict__"), ("builtins",), ("__builtins__",)}
         or any(_is_dunder_name(part) for part in dotted_name)
@@ -1036,16 +1228,15 @@ def _is_forbidden_subscript_root(node: ast.AST) -> bool:
     return isinstance(root, ast.Name) and _is_dunder_name(root.id)
 
 
-def _is_sys_modules_access(node: ast.AST) -> bool:
-    if isinstance(node, ast.Attribute):
-        return _dotted_name(node) == ("sys", "modules")
-    if isinstance(node, ast.Subscript):
-        return _dotted_name(node.value) == ("sys", "modules")
-    return False
+def _is_sys_modules_access(node: ast.AST, module_bindings: dict[str, tuple[str, ...]]) -> bool:
+    target = node.value if isinstance(node, ast.Subscript) else node
+    if not isinstance(target, (ast.Attribute, ast.Name)):
+        return False
+    return _resolve_dotted_name(target, module_bindings) == ("sys", "modules")
 
 
-def _is_unsafe_receiver(node: ast.AST) -> bool:
-    if _is_sys_modules_access(node):
+def _is_unsafe_receiver(node: ast.AST, module_bindings: dict[str, tuple[str, ...]]) -> bool:
+    if _is_sys_modules_access(node, module_bindings):
         return True
 
     dotted_name = _dotted_name(node)
@@ -1077,7 +1268,7 @@ def _is_dynamic_builtin_access(node: ast.AST) -> bool:
     return False
 
 
-def _is_forbidden_direct_call(node: ast.Call) -> bool:
+def _is_forbidden_direct_call(node: ast.Call, module_bindings: dict[str, tuple[str, ...]]) -> bool:
     if isinstance(node.func, ast.Name):
         return node.func.id in FORBIDDEN_DIRECT_CALL_NAMES or _is_dynamic_builtin_access(node.func)
     if not isinstance(node.func, ast.Attribute):
@@ -1095,15 +1286,19 @@ def _is_forbidden_direct_call(node: ast.Call) -> bool:
     }
     if _is_dynamic_builtin_access(node.func):
         return True
-    return dangerous_attribute and _is_unsafe_receiver(node.func.value)
+    return dangerous_attribute and _is_unsafe_receiver(node.func.value, module_bindings)
 
 
 def ast_contract_violations(source: str) -> list[str]:
     tree = ast.parse(source)
     violations: list[str] = []
     imported_roots = _imported_roots(tree)
+    module_bindings, direct_sys_modules_imports = _sys_modules_import_bindings(tree)
     violations.extend(
         f"forbidden import: {root}" for root in sorted(imported_roots & FORBIDDEN_DYNAMIC_MODULES)
+    )
+    violations.extend(
+        f"forbidden direct sys.modules import: {binding}" for binding in direct_sys_modules_imports
     )
     violations.extend(
         f"non-allowlisted import: {root}"
@@ -1113,13 +1308,13 @@ def ast_contract_violations(source: str) -> list[str]:
     for node in ast.walk(tree):
         if _is_dunder_attribute(node) or (isinstance(node, ast.Name) and node.id == "__builtins__"):
             violations.append("forbidden dunder access")
-        if _is_sys_modules_access(node):
+        if _is_sys_modules_access(node, module_bindings):
             violations.append("forbidden sys.modules access")
-        if isinstance(node, ast.Subscript) and _is_forbidden_subscript_root(node):
+        if isinstance(node, ast.Subscript) and _is_forbidden_subscript_root(node, module_bindings):
             violations.append("forbidden subscript root")
         if isinstance(node, ast.Name) and node.id in FORBIDDEN_DYNAMIC_NAMES:
             violations.append(f"forbidden dynamic name: {node.id}")
-        elif isinstance(node, ast.Call) and _is_forbidden_direct_call(node):
+        elif isinstance(node, ast.Call) and _is_forbidden_direct_call(node, module_bindings):
             violations.append("forbidden direct call")
     return violations
 
@@ -1144,6 +1339,10 @@ def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
     "source",
     [
         "sys.modules['os'].system('echo unsafe')\n",
+        "import sys as system\n",
+        "import sys as system\nsystem.modules['os'].system('echo unsafe')\n",
+        "import sys.modules as registry\nregistry['os'].system('echo unsafe')\n",
+        "from sys import modules as registry\n",
         "sys.__dict__['subprocess'].Popen('echo unsafe')\n",
         "sys.__dict__['builtins'].open('secret.txt')\n",
         "object.__getattribute__(sys, 'modules')['os'].system('echo unsafe')\n",
@@ -1153,6 +1352,10 @@ def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
     ],
     ids=[
         "sys-modules",
+        "sys-aliased-import",
+        "sys-modules-aliased-module",
+        "sys-modules-dotted-import-alias",
+        "sys-modules-import-from-alias",
         "sys-dict-subprocess",
         "sys-dict-builtins",
         "getattribute",
@@ -1163,6 +1366,12 @@ def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
 )
 def test_ast_contract_rejects_indirect_module_and_dynamic_access(source):
     assert ast_contract_violations(source)
+
+
+def test_ast_contract_allows_normal_sys_import_without_dynamic_module_access():
+    source = "import sys\nversion = sys.version\n"
+
+    assert ast_contract_violations(source) == []
 
 
 def test_ast_contract_allows_harmless_attributes_with_dangerous_api_names():

@@ -35,15 +35,16 @@ MAX_SKILL_WORDS = 5_000
 MAX_SKILL_CHARACTERS = 20_000
 
 MARKDOWN_LINK = re.compile(
-    r"!?\[[^\]]*\]\(\s*(?:<([^>\r\n]+)>|([^\s)]+))",
+    r"(?<!!)\[[^\]]*\]\(\s*(?:<([^>\r\n]+)>|([^\s)]+))",
     re.IGNORECASE,
 )
 MARKDOWN_REFERENCE_DEFINITION = re.compile(
-    r"^[ \t]{0,3}\[([^\]\r\n]+)\]:[ \t]*(?:<([^>\r\n]+)>|([^\s]+))",
+    r"^[ \t]{0,3}\[([^\]\r\n]+)\]:[ \t]*(?:\n[ \t]*)?"
+    r"(?:<([^>\r\n]+)>|([^\s][^\r\n]*))",
     re.IGNORECASE | re.MULTILINE,
 )
 MARKDOWN_REFERENCE_USAGE = re.compile(
-    r"!?\[[^\]\r\n]+\]\[([^\]\r\n]*)\]",
+    r"(?<!!)\[([^\]\r\n]+)\](?:\[([^\]\r\n]*)\]|(?!\())",
     re.IGNORECASE,
 )
 ASSET_PATH = re.compile(
@@ -52,7 +53,16 @@ ASSET_PATH = re.compile(
 TOP_LEVEL_FIELD = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?:[ \t]*(.*))?$")
 METADATA_FIELD = re.compile(r"^  ([A-Za-z_][A-Za-z0-9_-]*):[ \t]*(.*)$")
 YAML_INTEGER = re.compile(r"^[+-]?[0-9]+$")
-YAML_DECIMAL = re.compile(r"^[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+)$")
+YAML_DECIMAL = re.compile(
+    r"^[+-]?(?:(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|[0-9]+[eE][+-]?[0-9]+)$"
+)
+YAML_UNSUPPORTED_NUMBER = re.compile(
+    r"^[+-]?(?:0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+|\.inf|\.nan)$",
+    re.IGNORECASE,
+)
+YAML_TRUE_VALUES = frozenset({"true", "yes", "on"})
+YAML_FALSE_VALUES = frozenset({"false", "no", "off"})
+YAML_NULL_VALUES = frozenset({"null", "~"})
 
 
 def _frontmatter_error(path: Path, detail: str) -> AssertionError:
@@ -129,11 +139,15 @@ def _parse_scalar(path: Path, key: str, raw_value: str) -> object:
         raise _frontmatter_error(path, f"{key} has invalid plain scalar syntax")
     if " #" in value:
         raise _frontmatter_error(path, f"{key} uses an unsupported inline comment")
-    if value == "true":
+    if YAML_UNSUPPORTED_NUMBER.fullmatch(value):
+        raise _frontmatter_error(path, f"{key} uses an unsupported YAML number or special value")
+
+    normalized_value = value.casefold()
+    if normalized_value in YAML_TRUE_VALUES:
         return True
-    if value == "false":
+    if normalized_value in YAML_FALSE_VALUES:
         return False
-    if value in {"null", "~"}:
+    if normalized_value in YAML_NULL_VALUES:
         return None
     if YAML_INTEGER.fullmatch(value):
         return int(value, 10)
@@ -284,6 +298,11 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
         missing = ", ".join(sorted(missing_fields))
         raise _frontmatter_error(path, f"is missing required fields: {missing}")
 
+    if "compatibility" in frontmatter:
+        compatibility = frontmatter["compatibility"]
+        if not isinstance(compatibility, str) or not compatibility.strip():
+            raise _frontmatter_error(path, "compatibility must be a non-empty string")
+
     metadata = frontmatter.get("metadata")
     if metadata is not None and (
         not isinstance(metadata, dict)
@@ -297,13 +316,22 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
     return frontmatter
 
 
+def _normalize_reference_label(label: str) -> str:
+    return " ".join(label.split()).casefold()
+
+
 def _reference_definitions(markdown: str) -> dict[str, str]:
     definitions: dict[str, str] = {}
     for match in MARKDOWN_REFERENCE_DEFINITION.finditer(markdown):
-        label = match.group(1).strip().casefold()
+        label = _normalize_reference_label(match.group(1))
         target = match.group(2) or match.group(3)
         definitions.setdefault(label, target.strip())
     return definitions
+
+
+def _is_heading_label(markdown: str, start: int) -> bool:
+    line_start = markdown.rfind("\n", 0, start) + 1
+    return re.match(r"^[ \t]{0,3}#{1,6}(?:[ \t]+|$)", markdown[line_start:start]) is not None
 
 
 def markdown_targets(markdown: str) -> Iterator[str]:
@@ -312,8 +340,20 @@ def markdown_targets(markdown: str) -> Iterator[str]:
 
     definitions = _reference_definitions(markdown)
     for match in MARKDOWN_REFERENCE_USAGE.finditer(markdown):
-        label = match.group(1).strip().casefold()
-        yield definitions.get(label, match.group(1).strip())
+        if _is_heading_label(markdown, match.start()):
+            continue
+        if markdown[match.end() :].lstrip().startswith(":"):
+            continue
+
+        link_text = match.group(1).strip()
+        explicit_label = match.group(2)
+        label = (
+            link_text if explicit_label is None or not explicit_label.strip() else explicit_label
+        )
+        normalized_label = _normalize_reference_label(label)
+        if explicit_label is None and normalized_label not in definitions:
+            continue
+        yield definitions.get(normalized_label, label)
 
 
 def local_link_target(source: Path, target: str) -> Path | None:
@@ -387,8 +427,13 @@ def test_frontmatter_parser_accepts_required_fields_without_optional_sections(tm
     ("raw_value", "expected"),
     [
         ("true", True),
-        ("false", False),
+        ("TRUE", True),
+        ("yes", True),
+        ("False", False),
+        ("OFF", False),
         ("null", None),
+        ("Null", None),
+        ("NULL", None),
         ("~", None),
         ("1", 1),
         ("-2", -2),
@@ -396,7 +441,7 @@ def test_frontmatter_parser_accepts_required_fields_without_optional_sections(tm
         (".5", 0.5),
     ],
 )
-def test_frontmatter_parser_parses_unquoted_optional_scalar_types(tmp_path, raw_value, expected):
+def test_frontmatter_parser_recognizes_unquoted_plain_scalar_types(tmp_path, raw_value, expected):
     skill = tmp_path / "SKILL.md"
     skill.write_text(
         "---\nname: example\ndescription: Use when testing\nlicense: MIT\n"
@@ -404,10 +449,59 @@ def test_frontmatter_parser_parses_unquoted_optional_scalar_types(tmp_path, raw_
         encoding="utf-8",
     )
 
-    parsed_value = parse_frontmatter(skill)["compatibility"]
+    parsed_value = _parse_scalar(skill, "compatibility", raw_value)
 
     assert type(parsed_value) is type(expected)
     assert parsed_value == expected
+
+
+@pytest.mark.parametrize(
+    "raw_value",
+    ["0x10", "0o7", "0b1", ".inf", ".nan", "True", "NULL", "~"],
+)
+@pytest.mark.parametrize("field", ["compatibility", "metadata.version"])
+def test_frontmatter_parser_rejects_unsupported_plain_metadata_scalars(tmp_path, field, raw_value):
+    skill = tmp_path / "SKILL.md"
+    if field == "compatibility":
+        frontmatter = f"compatibility: {raw_value}\n"
+    else:
+        frontmatter = f"metadata:\n  version: {raw_value}\n"
+    skill.write_text(
+        f"---\nname: example\ndescription: Use when testing\nlicense: MIT\n{frontmatter}---\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError, match="malformed frontmatter"):
+        parse_frontmatter(skill)
+
+
+@pytest.mark.parametrize("scalar", ['"0x10"', '"True"', '"NULL"', '"~"'])
+def test_frontmatter_parser_keeps_quoted_yaml_looking_scalars_as_strings(tmp_path, scalar):
+    skill = tmp_path / "SKILL.md"
+    skill.write_text(
+        "---\nname: example\ndescription: Use when testing\nlicense: MIT\n"
+        f"compatibility: {scalar}\n---\n",
+        encoding="utf-8",
+    )
+
+    assert parse_frontmatter(skill)["compatibility"] == scalar[1:-1]
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    ["author: Nexus Envision Sdn Bhd", "version: 0.1.0", "release: v1.2.3"],
+)
+def test_frontmatter_parser_keeps_plain_version_and_author_strings(tmp_path, metadata):
+    skill = tmp_path / "SKILL.md"
+    skill.write_text(
+        "---\nname: example\ndescription: Use when testing\nlicense: MIT\n"
+        f"metadata:\n  {metadata}\n---\n",
+        encoding="utf-8",
+    )
+
+    assert parse_frontmatter(skill)["metadata"] == dict(
+        [tuple(item.split(": ", maxsplit=1)) for item in (metadata,)]
+    )
 
 
 @pytest.mark.parametrize("metadata_field", ["version: 1", "enabled: true", "empty: null"])
@@ -579,6 +673,37 @@ def test_markdown_targets_keep_inline_and_angle_bracket_targets():
         "references/normal.md",
         "references/angled target.md",
     ]
+
+
+def test_markdown_targets_ignore_images_and_heading_labels():
+    markdown = "![diagram](references/missing-image.png)\n# [Heading label]\n"
+
+    assert list(markdown_targets(markdown)) == []
+
+
+def test_markdown_targets_support_full_collapsed_and_shortcut_references():
+    markdown = """
+[full text][MiXeD   LaBeL]
+[collapsed text][]
+[shortcut text]
+
+[  mixed   label  ]: references/full.md
+[collapsed text]:
+  references/collapsed.md
+[shortcut text]: references/shortcut.md
+"""
+
+    assert list(markdown_targets(markdown)) == [
+        "references/full.md",
+        "references/collapsed.md",
+        "references/shortcut.md",
+    ]
+
+
+def test_markdown_targets_report_missing_full_and_collapsed_references():
+    markdown = "[missing full][absent-label]\n[missing collapsed][]\n[ordinary bracket text]\n"
+
+    assert list(markdown_targets(markdown)) == ["absent-label", "missing collapsed"]
 
 
 def test_reference_style_markdown_links_resolve_case_insensitively_and_report_missing_targets(
