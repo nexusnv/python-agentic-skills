@@ -25,7 +25,7 @@ secret values.
 
 - Test runner and version:
 - Relevant dependency/tool versions:
-- Exact working directory:
+- Working directory (project-relative or redacted):
 - Environment fingerprint (OS/runtime and non-sensitive runtime details):
 - Seed (or N/A with reason):
 - Environment mode: local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified
@@ -43,10 +43,11 @@ secret values.
 
 | scenario_id | execution_id | Traceability | Label | Input class | Preconditions | Invocation | Properties/invariants | Coverage areas/plan | Expected result | Expected failure / not-applicable reason | Expected side effects | Cleanup | environment_mode | isolation_scope_verification | run_approval_status | run_approval_scope | credential_approval_status | credential_approval_scope | Safety status | planned_result_state |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-|  | pending before execution; N/A for blocked/not-run |  |  |  |  |  | named properties or N/A — example-only — reason | input families, boundaries, state transitions, exclusions |  |  |  |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits | default-safe / approved side effect / verified sandbox / blocked-not-run / refusal | planned |
+|  | pending |  |  |  |  |  | named properties or N/A — example-only — reason | input families, boundaries, state transitions, exclusions |  |  |  |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits | default-safe / approved side effect / verified sandbox / blocked-not-run / refusal | planned |
 
-The scenario matrix is a planning table, not an actual result table. Set `execution_id: pending`
-before execution; use `N/A` for blocked/not-run. Write actual outcomes in `Results` or `Not run`.
+The scenario matrix is a planning table, not an actual result table. Every planning row remains
+`execution_id: pending`; write actual execution IDs only in `Exact executions`, executed scenario
+outcomes in `Results`, and blocked/not-run rows only in `Not run`.
 
 ## Oracles and normalization
 
@@ -59,28 +60,30 @@ volatile.
 
 ## Exact executions
 
-| execution_id | scenario_ids | Environment mode | Isolation/scope verification | run_approval_status | run_approval_scope | credential_approval_status | credential_approval_scope | Exact command | Exit status | Runner | Environment fingerprint | Relevant bounded excerpt |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| execution-001 | scenario-id-001 | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits |  |  |  |  |  |
+| execution_id | scenario_ids | Environment mode | Isolation/scope verification | run_approval_status | run_approval_scope | credential_approval_status | credential_approval_scope | Working directory (project-relative or redacted) | Command (redacted; structure preserved) | Command replay note | Exit status | Runner | Environment fingerprint | Relevant bounded excerpt |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| execution-001 | scenario-id-001 | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits |  |  |  |  |  |  |  |  |
 
 Only executed rows belong in `Exact executions`; it has one row per command/retry with a real
-execution ID, exact command, and exit status. The actual `result_state` for an executed scenario
-belongs only in the linked `Results` row, not in this execution table. Keep `scenario_id` stable
-across retries and assign a new `execution_id` to every executed command. Every executed scenario
-result references both IDs so commands, exit statuses, and retries remain unambiguous. A blocked
-or not-run result belongs only in `Not run` and uses `scenario_id`, `execution_id: N/A`, a reason,
-and no exact command or exit status.
+execution ID, working directory, command representation, and exit status. The actual `result_state`
+for an executed scenario belongs only in the linked `Results` row, not in this execution table.
+Use the exact replayable command when safe; otherwise use a documented redacted omission marker that
+preserves command structure and explain the omission in `Command replay note`. Keep `scenario_id`
+stable across retries and assign a new `execution_id` to every executed command. Every executed
+scenario result references both IDs so commands, exit statuses, and retries remain unambiguous. A
+blocked or not-run result belongs only in `Not run` and uses the table's N/A execution value, a
+reason, and no command or exit status.
 
 ## Results
 
-| execution_id | scenario_id | Properties/invariants | Coverage areas/plan | Environment mode | Isolation/scope verification | run_approval_status | run_approval_scope | credential_approval_status | credential_approval_scope | result_state | observed_public_outcome | evidence_reference | retry_of_execution_id | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-|  |  | named properties or N/A — example-only — reason | input families, boundaries, state transitions, exclusions | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits | pass / fail / skip / expected-failure |  |  |  |  |
+| execution_id | scenario_id | result_state | observed_public_outcome | evidence_reference | retry_of_execution_id | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+|  |  | pass / fail / skip / expected-failure |  |  |  |  |
 
 Results contain one row per executed scenario result linked to one execution, with `scenario_id`,
 `execution_id`, `result_state`, `observed_public_outcome`, and `evidence_reference`. Exclude
-blocked/not-run rows; put those only in `Not run` with `execution_id: N/A`, a reason, and no command
-or exit status.
+blocked/not-run rows; put those only in `Not run` with its N/A execution value, a reason, and no
+command or exit status.
 
 ## Failures and minimized reproducers
 
@@ -91,7 +94,7 @@ or exit status.
 - Retry of execution_id:
 - Scenario and public boundary:
 - Minimal inputs and state:
-- Exact replay command:
+- Replay command (redacted; structure preserved):
 - Seed (or N/A with reason):
 - Environment fingerprint and relevant tool versions:
 - Environment mode:
@@ -152,9 +155,9 @@ No minimized reproducer: state why minimization was not applicable or possible.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 |  | N/A | not-run |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits |  |
 
-`Not run` is the only structured location for blocked/not-run rows. They use `scenario_id`,
-`execution_id: N/A`, `result_state: not-run`, a reason, and run/credential approval fields, but no
-command or exit status. For manual/non-gating work, use the precise reason such as
+`Not run` is the only structured location for blocked/not-run rows. They use `scenario_id`, the
+Not run table's N/A execution value, `result_state: not-run`, a reason, and run/credential approval
+fields, but no command or exit status. For manual/non-gating work, use the precise reason such as
 `approval blocked; manual/non-gating`; manual/non-gating is not a separate result state.
 
 

@@ -91,8 +91,8 @@ decide whether an observable result is correct.
 Create a planning matrix before implementation. Use one planning row per scenario with a stable
 `scenario_id` and `execution_id: pending`. Keep `scenario_id` stable across retries. The
 `Exact executions` table has one row per command/retry with a unique `execution_id`; `Results` has
-one row per executed scenario linked to an execution; and `Not run` has one row per blocked/not-run scenario
-with `execution_id: N/A`. Include:
+one row per executed scenario linked to an execution; and `Not run` has one row per blocked/not-run
+scenario with the table's N/A execution value. Include:
 
 | Field | Required content |
 | --- | --- |
