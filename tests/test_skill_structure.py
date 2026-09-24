@@ -40,7 +40,8 @@ MARKDOWN_LINK = re.compile(
 )
 MARKDOWN_REFERENCE_DEFINITION = re.compile(
     r"^[ \t]{0,3}\[([^\]\r\n]+)\]:[ \t]*(?:\n[ \t]*)?"
-    r"(?:<([^>\r\n]+)>|([^\s][^\r\n]*))",
+    r"(?:<([^>\r\n]+)>|([^\s]+))"
+    r"[ \t]*(?:\"[^\"\r\n]*\"|'[^'\r\n]*')?[ \t]*$",
     re.IGNORECASE | re.MULTILINE,
 )
 MARKDOWN_REFERENCE_USAGE = re.compile(
@@ -713,15 +714,21 @@ def test_reference_style_markdown_links_resolve_case_insensitively_and_report_mi
     references.mkdir()
     valid_target = references / "valid target.md"
     valid_target.write_text("valid\n", encoding="utf-8")
+    titled_target = references / "titled-valid.md"
+    titled_target.write_text("titled valid\n", encoding="utf-8")
     source = tmp_path / "source.md"
     source.write_text(
         "[valid][VaLiD]\n"
+        "[titled valid][TITLED VALID]\n"
         "[missing][MISSING]\n"
+        "[missing titled][MISSING TITLED]\n"
         "[external][external]\n"
         "[anchor][anchor]\n"
         "[mail][mail]\n"
         "\n"
         "[valid]: <references/valid target.md>\n"
+        '[titled valid]: references/titled-valid.md "A titled reference"\n'
+        "[missing titled]: <references/titled-missing.md> 'Another title'\n"
         "[external]: https://example.com/docs\n"
         "[anchor]: #section\n"
         "[mail]: mailto:team@example.com\n",
@@ -734,7 +741,7 @@ def test_reference_style_markdown_links_resolve_case_insensitively_and_report_mi
         if resolved is not None and not resolved.exists():
             missing_targets.append(target)
 
-    assert missing_targets == ["MISSING"]
+    assert missing_targets == ["MISSING", "references/titled-missing.md"]
 
 
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)

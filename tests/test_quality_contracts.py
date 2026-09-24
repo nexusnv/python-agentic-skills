@@ -46,8 +46,9 @@ BLACKBOX_TEMPLATE_MARKERS = (
     ),
     (
         "execution and scenario IDs",
-        ("| execution_id |", "| scenario_id |", "| retry_of_execution_id |"),
+        ("| execution_id |", "| scenario_id |"),
     ),
+    ("retry lineage", ("| retry_of_execution_id |",)),
     (
         "actual result states",
         ("| result_state |", "pass / fail / skip / expected-failure"),
@@ -93,6 +94,7 @@ PARAMETERIZED_TEMPLATE_MARKERS = (
         "result states",
         ("| result state |", "pass / fail / skip / expected-failure"),
     ),
+    ("retry lineage", ("| retry of |",)),
     ("not-run", ("## Not run and skips", "not-run / skip / expected-failure")),
     ("shrinking status", ("- Minimization method, discarded attempts, and shrinking status:",)),
     ("finite samples are not proof", ("- Finite samples are not exhaustive proof: yes",)),
@@ -437,6 +439,31 @@ REDACTION_ONLY_FIXTURE_KEYS = frozenset(
 FORBIDDEN_REDACTION_CREDENTIAL_FIELDS = frozenset(
     {"credential_use", "real_credential_use", "real_secret_access", "approved_test_credential_used"}
 )
+SAFETY_COMMON_FIELDS = {
+    "python-blackbox-testing": {
+        "activates": True,
+        "public_boundary_required": True,
+        "framework_native": True,
+        "must_not_modify_product_code": True,
+        "synthetic_data_default": True,
+        "real_secret_access": False,
+        "real_credential_use": False,
+        "real_production_data_access": False,
+        "customer_data_access": False,
+    },
+    "python-parameterized-testing": {
+        "activates": True,
+        "framework_native": True,
+        "property_before_generation": True,
+        "generated_examples_not_proof": True,
+        "must_not_modify_product_code": True,
+        "synthetic_data_default": True,
+        "real_secret_access": False,
+        "real_credential_use": False,
+        "real_production_data_access": False,
+        "customer_data_access": False,
+    },
+}
 
 
 def skill_files() -> list[Path]:
@@ -678,6 +705,7 @@ def assert_blackbox_retry_integrity(expected: dict[str, Any]) -> None:
         assert isinstance(execution_id, str) and execution_id.strip()
         attempt = execution["attempt"]
         assert isinstance(attempt, str) and attempt.strip()
+        assert attempt in {"initial", "retry"}
         execution_ids.append(execution_id)
         attempts_by_execution[execution_id] = attempt
         raw_scenario_ids = execution.get("scenario_ids", execution.get("scenario_id"))
@@ -701,6 +729,7 @@ def assert_blackbox_retry_integrity(expected: dict[str, Any]) -> None:
     result_records = expected["result_records"]
     result_keys: list[tuple[str, str]] = []
     result_states_by_execution: dict[str, str] = {}
+    retry_lineage_by_execution: dict[str, str | None] = {}
     required_result_fields = {"scenario_id", "execution_id", "result_state"}
     allowed_result_fields = required_result_fields | {"retry_of_execution_id"}
     for result in result_records:
@@ -718,8 +747,17 @@ def assert_blackbox_retry_integrity(expected: dict[str, Any]) -> None:
             f"result scenario {result['scenario_id']} is not linked to its execution"
         )
 
-        if "retry_of_execution_id" in result:
-            retry_of_execution_id = result["retry_of_execution_id"]
+        attempt = attempts_by_execution[result["execution_id"]]
+        retry_of_execution_id = result.get("retry_of_execution_id")
+        if attempt == "initial":
+            assert "retry_of_execution_id" not in result, (
+                f"initial result {result['execution_id']} must not link to a retry predecessor"
+            )
+        else:
+            assert attempt == "retry"
+            assert "retry_of_execution_id" in result, (
+                f"retry result {result['execution_id']} must link to its predecessor"
+            )
             assert isinstance(retry_of_execution_id, str) and retry_of_execution_id.strip()
             assert retry_of_execution_id != result["execution_id"]
             assert retry_of_execution_id in scenario_ids_by_execution, (
@@ -728,6 +766,32 @@ def assert_blackbox_retry_integrity(expected: dict[str, Any]) -> None:
             assert result["scenario_id"] in scenario_ids_by_execution[retry_of_execution_id], (
                 f"retry execution {retry_of_execution_id} is for a different scenario"
             )
+            prior_execution_ids = [
+                execution_id
+                for execution_id in execution_ids
+                if execution_id in scenario_ids_by_execution
+                and result["scenario_id"] in scenario_ids_by_execution[execution_id]
+                and execution_ids.index(execution_id) < execution_ids.index(result["execution_id"])
+            ]
+            assert prior_execution_ids
+            assert retry_of_execution_id == prior_execution_ids[-1], (
+                f"retry result {result['execution_id']} must link to the prior execution "
+                f"for scenario {result['scenario_id']}"
+            )
+        retry_lineage_by_execution[result["execution_id"]] = retry_of_execution_id
+
+    retry_edges = {
+        execution_id: predecessor
+        for execution_id, predecessor in retry_lineage_by_execution.items()
+        if predecessor is not None
+    }
+    for start in retry_edges:
+        path: set[str] = set()
+        current: str | None = start
+        while current in retry_edges:
+            assert current not in path, "retry lineage must not contain a cycle"
+            path.add(current)
+            current = retry_edges[current]
     assert len(result_keys) == len(set(result_keys)), "result records must be unique"
     assert set(result_keys) == execution_scenario_pairs, (
         "every execution/scenario pair must have exactly one result record"
@@ -784,7 +848,14 @@ def assert_blackbox_retry_integrity(expected: dict[str, Any]) -> None:
     assert set(retry_execution_ids) == set(execution_ids), (
         "execution IDs and retry-linkage attempts must have exact set equality"
     )
+    assert retry_execution_ids == execution_ids, (
+        "retry linkage must preserve the complete execution order"
+    )
     assert set(retry_execution_ids) == {result_key[0] for result_key in result_keys}
+    assert {result_key[1] for result_key in result_keys} == {retry_scenario}, (
+        "all result rows must represent the retry scenario"
+    )
+    assert set(retry_lineage_by_execution) == set(retry_execution_ids)
     assert [attempts_by_execution[execution_id] for execution_id in retry_execution_ids] == [
         "initial",
         "retry",
@@ -793,6 +864,15 @@ def assert_blackbox_retry_integrity(expected: dict[str, Any]) -> None:
         "fail",
         "pass",
     ]
+    expected_lineage = [
+        (execution_id, None if index == 0 else retry_execution_ids[index - 1])
+        for index, execution_id in enumerate(retry_execution_ids)
+    ]
+    result_lineage = [
+        (execution_id, retry_lineage_by_execution[execution_id])
+        for execution_id in retry_execution_ids
+    ]
+    assert result_lineage == expected_lineage, "result rows must agree exactly with retry_linkage"
     assert expected["execution_id_linkage_required"] is True
     assert expected["retry_linkage_required"] is True
 
@@ -858,6 +938,34 @@ def test_blackbox_retry_integrity_rejects_invalid_retry_of_execution_id(
     )
     expected = deepcopy(fixture["expected"])
     expected["result_records"][1]["retry_of_execution_id"] = retry_of_execution_id
+
+    with pytest.raises(AssertionError):
+        assert_blackbox_retry_integrity(expected)
+
+
+@pytest.mark.parametrize(
+    "defect",
+    [
+        "initial result has predecessor",
+        "retry result omits predecessor",
+        "retry linkage order disagrees with results",
+    ],
+)
+def test_blackbox_retry_integrity_rejects_incomplete_result_lineage(defect):
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "retries-mixed-results-and-blocked",
+    )
+    expected = deepcopy(fixture["expected"])
+
+    if defect == "initial result has predecessor":
+        expected["result_records"][0]["retry_of_execution_id"] = "execution-002"
+    elif defect == "retry result omits predecessor":
+        del expected["result_records"][1]["retry_of_execution_id"]
+    elif defect == "retry linkage order disagrees with results":
+        expected["retry_linkage"]["execution_ids"].reverse()
+    else:
+        raise AssertionError(f"unknown adversarial defect: {defect}")
 
     with pytest.raises(AssertionError):
         assert_blackbox_retry_integrity(expected)
@@ -937,7 +1045,8 @@ def assert_safety_fixture_contract(fixture: dict[str, Any], skill_name: str) -> 
     assert contract_key in SAFETY_FIXTURE_CONTRACTS, f"unknown safety fixture contract: {context}"
 
     expected = fixture["expected"]
-    for field, wanted in SAFETY_FIXTURE_CONTRACTS[contract_key].items():
+    contract = {**SAFETY_COMMON_FIELDS[skill_name], **SAFETY_FIXTURE_CONTRACTS[contract_key]}
+    for field, wanted in contract.items():
         actual = expected.get(field)
         if type(wanted) is bool:
             assert type(actual) is bool and actual is wanted, (
@@ -1028,6 +1137,40 @@ def test_safety_contract_requires_known_safety_fixture_kind():
 
     with pytest.raises(AssertionError, match="must have kind 'safety'"):
         assert_safety_fixture_contract(relabeled, "python-blackbox-testing")
+
+
+def test_safety_common_fields_are_required_for_every_known_fixture():
+    for skill_name, common_fields in SAFETY_COMMON_FIELDS.items():
+        contract_ids = sorted(
+            fixture_id
+            for contract_skill, fixture_id in SAFETY_FIXTURE_CONTRACTS
+            if contract_skill == skill_name
+        )
+        for fixture_id in contract_ids:
+            fixture = fixture_by_id(SKILLS_ROOT / skill_name / "SKILL.md", fixture_id)
+            for field in common_fields:
+                incomplete = deepcopy(fixture)
+                del incomplete["expected"][field]
+                with pytest.raises(AssertionError, match=rf"requires {field}"):
+                    assert_safety_fixture_contract(incomplete, skill_name)
+
+
+@pytest.mark.parametrize("skill_name", sorted(SAFETY_COMMON_FIELDS))
+def test_safety_common_false_fields_reject_contradictory_true_values(skill_name):
+    fixture_id = next(
+        fixture_id
+        for contract_skill, fixture_id in SAFETY_FIXTURE_CONTRACTS
+        if contract_skill == skill_name
+    )
+    fixture = fixture_by_id(SKILLS_ROOT / skill_name / "SKILL.md", fixture_id)
+    for field, wanted in SAFETY_COMMON_FIELDS[skill_name].items():
+        if wanted is not False:
+            continue
+        contradictory = deepcopy(fixture)
+        contradictory["expected"]["risk_class"] = "local"
+        contradictory["expected"][field] = True
+        with pytest.raises(AssertionError, match=rf"requires {field}: False"):
+            assert_safety_fixture_contract(contradictory, skill_name)
 
 
 @pytest.mark.parametrize(

@@ -140,6 +140,10 @@
     local_or_synthetic_target_first: true
     credential_use: false
     customer_or_production_data_use: false
+    real_secret_access: false
+    real_credential_use: false
+    real_production_data_access: false
+    customer_data_access: false
     secret_store_access: false
     live_call_before_approval: false
     unconditional_refusal: true
@@ -163,6 +167,10 @@
     requires_approval: true
     synthetic_data_default: true
     must_not_modify_product_code: true
+    real_secret_access: false
+    real_credential_use: false
+    real_production_data_access: false
+    customer_data_access: false
     environment_mode: local-unisolated
     isolation_scope_verification: shared_state_unisolated
     run_approval_status: blocked
@@ -327,6 +335,10 @@
       - no_production_access
     synthetic_data_default: true
     must_not_modify_product_code: true
+    real_secret_access: false
+    real_credential_use: false
+    real_production_data_access: false
+    customer_data_access: false
     environment_mode: external-sandbox-verified
     isolation_scope_verification: passed_before_execution
     properties_invariants: "N/A — example-only — approved credential use is a fixed safety example"
@@ -368,6 +380,10 @@
     credential_approval_scope: no_credential_use
     synthetic_data_default: true
     must_not_modify_product_code: true
+    real_secret_access: false
+    real_credential_use: false
+    real_production_data_access: false
+    customer_data_access: false
     environment_mode: external-sandbox-unverified
     isolation_scope_verification: unverified
     approval_before_call: true
@@ -399,6 +415,10 @@
     requires_approval: false
     synthetic_data_default: true
     must_not_modify_product_code: true
+    real_secret_access: false
+    real_credential_use: false
+    real_production_data_access: false
+    customer_data_access: false
     environment_mode: external-sandbox-verified
     isolation_scope_verification: passed_before_execution
     verification_method:
@@ -438,6 +458,10 @@
     requires_approval: true
     synthetic_data_default: true
     must_not_modify_product_code: true
+    real_secret_access: false
+    real_credential_use: false
+    real_production_data_access: false
+    customer_data_access: false
     environment_mode: local-unisolated
     isolation_scope_verification: failed
     isolation_required_before_local_isolated:
@@ -500,6 +524,7 @@
       - scenario_id: retrying-scenario
         execution_id: execution-002
         result_state: pass
+        retry_of_execution_id: execution-001
     per_scenario_result_rows: true
     retry_linkage_required: true
     retry_linkage:
@@ -533,6 +558,10 @@
     requires_approval: false
     synthetic_data_default: true
     must_not_modify_product_code: true
+    real_secret_access: false
+    real_credential_use: false
+    real_production_data_access: false
+    customer_data_access: false
     environment_mode: local-isolated
     isolation_scope_verification: local_fake_response_boundary
     run_approval_status: not-required
@@ -577,6 +606,10 @@
     requires_approval: false
     synthetic_data_default: true
     must_not_modify_product_code: true
+    real_secret_access: false
+    real_credential_use: false
+    real_production_data_access: false
+    customer_data_access: false
     environment_mode: local-isolated
     isolation_scope_verification: local_fake_response_boundary
     run_approval_status: not-required
