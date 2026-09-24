@@ -67,6 +67,7 @@ EXCLUDED_MARKDOWN_DIRECTORIES = frozenset(
         "dist",
         "htmlcov",
         "node_modules",
+        "superpowers",
     }
 )
 TOP_LEVEL_FIELD = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?:[ \t]*(.*))?$")
@@ -722,11 +723,7 @@ def test_all_relative_markdown_links_resolve():
         for target in markdown_targets(source.read_text(encoding="utf-8")):
             resolved = local_link_target(source, target)
             if resolved is not None and not resolved.exists():
-                # Some repository documents use a bare repository-root path.
-                # Accept that form only when its root-relative target exists.
-                root_relative = local_link_target(source, f"/{target.lstrip('/')}")
-                if root_relative is None or not root_relative.exists():
-                    missing_targets.append(f"{source.relative_to(ROOT)} -> {target}")
+                missing_targets.append(f"{source.relative_to(ROOT)} -> {target}")
 
     assert not missing_targets, "missing local Markdown targets:\n" + "\n".join(missing_targets)
 
@@ -750,6 +747,19 @@ def test_root_relative_local_links_and_missing_docs_links_are_checked(tmp_path):
 
     assert resolved[0] == tmp_path / "docs" / "present.md"
     assert missing == ["/docs/missing.md"]
+
+
+def test_relative_markdown_links_do_not_fall_back_to_repository_root(tmp_path):
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    source = docs / "source.md"
+    source.write_text("[README](README.md)\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("root\n", encoding="utf-8")
+
+    target = local_link_target(source, "README.md", tmp_path)
+
+    assert target == docs / "README.md"
+    assert not target.exists()
 
 
 def test_root_relative_local_link_uses_repository_root():

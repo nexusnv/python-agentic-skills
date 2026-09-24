@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import re
 from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -172,21 +173,34 @@ TEMPLATE_TABLE_REQUIREMENTS = {
             "Exact executions",
             (
                 "execution id",
-                "command (redacted; structure preserved)",
+                "scenario ids",
                 "environment mode",
-                "environment fingerprint",
+                "isolation scope verification",
                 "run approval status",
                 "run approval scope",
                 "credential approval status",
                 "credential approval scope",
                 "working directory (project-relative or redacted)",
+                "command (redacted; structure preserved)",
+                "command replay note",
                 "exit status",
+                "runner",
+                "environment fingerprint",
+                "relevant bounded excerpt",
             ),
             (),
         ),
         (
             "Results",
-            ("execution id", "scenario id", "result state", "retry of execution id"),
+            (
+                "execution id",
+                "scenario id",
+                "result state",
+                "observed public outcome",
+                "evidence reference",
+                "retry of execution id",
+                "notes",
+            ),
             ("pass / fail / skip / expected-failure",),
         ),
         (
@@ -201,6 +215,7 @@ TEMPLATE_TABLE_REQUIREMENTS = {
                 "run approval scope",
                 "credential approval status",
                 "credential approval scope",
+                "coverage impact",
             ),
             ("not-run",),
         ),
@@ -210,23 +225,41 @@ TEMPLATE_TABLE_REQUIREMENTS = {
             "Exact executions",
             (
                 "execution id",
+                "case ids",
                 "working directory (project-relative or redacted)",
                 "exact command (redacted, structure preserved)",
                 "replay note",
                 "exit status",
-                "environment",
                 "runner",
+                "environment",
+                "bounded evidence",
             ),
             (),
         ),
         (
             "Results",
-            ("case id", "execution id", "result state", "retry of"),
+            (
+                "case id",
+                "execution id",
+                "result state",
+                "observed outcome",
+                "oracle result",
+                "evidence reference",
+                "retry of",
+                "notes",
+            ),
             ("pass / fail / skip / expected-failure",),
         ),
         (
             "Not run and skips",
-            ("case id or coverage area", "result state", "reason", "command", "exit status"),
+            (
+                "case id or coverage area",
+                "result state",
+                "reason",
+                "command",
+                "exit status",
+                "coverage impact",
+            ),
             ("not-run",),
         ),
     ),
@@ -299,6 +332,41 @@ PARAMETERIZED_FIXTURE_CONTRACT_LANGUAGE = {
     "finite-sample limitation": r"exhaustive proof|not proof",
     "limitations": r"limitation",
 }
+
+
+@dataclass(frozen=True)
+class ReportTableContract:
+    section_name: str
+    headers: tuple[str, ...]
+    body_markers: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ReportContract:
+    section_markers: tuple[tuple[str, tuple[str, ...]], ...]
+    table_contracts: tuple[ReportTableContract, ...]
+    required_fixture_fields: frozenset[str]
+    fixture_language: dict[str, str]
+
+
+REPORT_CONTRACTS = {
+    skill_name: ReportContract(
+        section_markers=tuple(TEMPLATE_SECTION_MARKERS[skill_name]),
+        table_contracts=tuple(
+            ReportTableContract(*table_requirements)
+            for table_requirements in TEMPLATE_TABLE_REQUIREMENTS[skill_name]
+        ),
+        required_fixture_fields=FIXTURE_REQUIRED_REPORT_FIELDS[skill_name],
+        fixture_language=(
+            BLACKBOX_FIXTURE_CONTRACT_LANGUAGE
+            if skill_name == "python-blackbox-testing"
+            else PARAMETERIZED_FIXTURE_CONTRACT_LANGUAGE
+        ),
+    )
+    for skill_name in TEMPLATE_SECTION_MARKERS
+}
+
+
 MARKDOWN_TEMPLATE_BLOCK = re.compile(
     r"^```markdown[ \t]*\n(?P<template>.*?)^```[ \t]*$",
     re.MULTILINE | re.DOTALL,
@@ -356,13 +424,33 @@ FORBIDDEN_DIRECT_CALL_NAMES = frozenset(
         "write_text",
     }
 )
+FORBIDDEN_UNSAFE_ATTRIBUTE_NAMES = (
+    FORBIDDEN_DIRECT_CALL_NAMES
+    | frozenset(
+        {
+            "_os",
+            "import_module",
+            "run_path",
+            "CDLL",
+            "eval",
+            "exec",
+            "__import__",
+        }
+    )
+    | FORBIDDEN_FRAME_GLOBAL_NAMES
+)
 UNSAFE_MODULE_ROOTS = frozenset(
     {"builtins", "ctypes", "importlib", "os", "pathlib", "runpy", "shutil", "subprocess"}
 )
-FILESYSTEM_MUTATION_METHODS = frozenset(
-    {"open", "remove", "removedirs", "rmdir", "rmtree", "unlink", "write_bytes", "write_text"}
-)
-SAFETY_FIXTURE_CONTRACTS = {
+
+
+@dataclass(frozen=True)
+class SafetyFixtureContract:
+    expected_fields: dict[str, Any]
+    redaction_only: bool = False
+
+
+SAFETY_FIXTURE_EXPECTED_FIELDS = {
     ("python-blackbox-testing", "production-endpoint-real-token"): {
         "risk_class": "live",
         "requires_approval": True,
@@ -545,6 +633,13 @@ REDACTION_ONLY_FIXTURE_KEYS = frozenset(
         ("python-parameterized-testing", "untrusted-generated-and-response-output"),
     }
 )
+SAFETY_FIXTURE_CONTRACTS = {
+    key: SafetyFixtureContract(
+        expected_fields=expected_fields,
+        redaction_only=key in REDACTION_ONLY_FIXTURE_KEYS,
+    )
+    for key, expected_fields in SAFETY_FIXTURE_EXPECTED_FIELDS.items()
+}
 FORBIDDEN_REDACTION_CREDENTIAL_FIELDS = frozenset(
     {"credential_use", "real_credential_use", "real_secret_access", "approved_test_credential_used"}
 )
@@ -667,6 +762,13 @@ def _template_sections(template: str) -> dict[str, str]:
     return sections
 
 
+@dataclass(frozen=True)
+class ParsedMarkdownTable:
+    header: tuple[str, ...]
+    separator: tuple[str, ...]
+    body: tuple[tuple[str, ...], ...]
+
+
 def _table_cells(line: str) -> list[str]:
     value = line.strip()
     if value.startswith("|"):
@@ -680,9 +782,9 @@ def _is_table_separator(cells: list[str]) -> bool:
     return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells)
 
 
-def _table_blocks(section: str) -> list[tuple[list[str], list[list[str]]]]:
+def _table_blocks(section: str) -> list[ParsedMarkdownTable]:
     lines = section.splitlines()
-    tables: list[tuple[list[str], list[list[str]]]] = []
+    tables: list[ParsedMarkdownTable] = []
     index = 0
     while index < len(lines):
         if not lines[index].strip().startswith("|"):
@@ -694,12 +796,24 @@ def _table_blocks(section: str) -> list[tuple[list[str], list[list[str]]]]:
             index += 1
         if len(block) < 2 or not _is_table_separator(block[1]):
             continue
-        tables.append((block[0], block[2:]))
+        tables.append(
+            ParsedMarkdownTable(
+                header=tuple(block[0]),
+                separator=tuple(block[1]),
+                body=tuple(tuple(row) for row in block[2:]),
+            )
+        )
     return tables
 
 
 def _normalized_table_header(header: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", header.casefold()).strip()
+
+
+def _table_body_row_for_column_count(row: tuple[str, ...], column_count: int) -> tuple[str, ...]:
+    if len(row) > column_count and all(not cell for cell in row[column_count:]):
+        return row[:column_count]
+    return row
 
 
 def _assert_table_requirements(
@@ -713,20 +827,33 @@ def _assert_table_requirements(
     section = sections.get(section_name.casefold())
     assert section is not None, f"{template_path} lacks canonical {section_name} section fields"
 
-    tables = _table_blocks(section)
-    matching_tables: list[tuple[list[str], list[list[str]]]] = []
-    for headers, rows in tables:
-        normalized_headers = {_normalized_table_header(header) for header in headers}
-        required_header_names = {_normalized_table_header(field) for field in required_fields}
-        if required_header_names <= normalized_headers:
-            matching_tables.append((headers, rows))
+    expected_headers = tuple(_normalized_table_header(header) for header in required_fields)
+    matching_tables: list[ParsedMarkdownTable] = []
+    for table in _table_blocks(section):
+        normalized_headers = tuple(_normalized_table_header(header) for header in table.header)
+        assert len(set(normalized_headers)) == len(normalized_headers), (
+            f"{template_path} {section_name} table has duplicate headers"
+        )
+        assert len(table.separator) == len(table.header), (
+            f"{template_path} {section_name} table separator has the wrong column count"
+        )
+        assert table.body, f"{template_path} {section_name} table must contain a body row"
+        body_rows = tuple(
+            _table_body_row_for_column_count(row, len(table.header)) for row in table.body
+        )
+        assert all(len(row) == len(table.header) for row in body_rows), (
+            f"{template_path} {section_name} table body has the wrong column count"
+        )
+        if normalized_headers == expected_headers:
+            matching_tables.append(table)
     assert matching_tables, (
-        f"{template_path} lacks canonical {section_name} table fields: {', '.join(required_fields)}"
+        f"{template_path} lacks canonical {section_name} table fields in exact order: "
+        f"{', '.join(required_fields)}"
     )
 
     if required_body_markers:
         body = "\n".join(
-            "|".join(row) for _headers, rows in matching_tables for row in rows
+            "|".join(row) for table in matching_tables for row in table.body
         ).casefold()
         for marker in required_body_markers:
             assert marker.casefold() in body, (
@@ -738,8 +865,9 @@ def assert_report_template_contains(skill_name: str, template_path: Path | None 
     if template_path is None:
         template_path = SKILLS_ROOT / skill_name / "references" / "evidence-report.md"
     template = extract_fenced_markdown_template(template_path)
+    report_contract = REPORT_CONTRACTS[skill_name]
     sections = _template_sections(template)
-    for section_name, markers in TEMPLATE_SECTION_MARKERS[skill_name]:
+    for section_name, markers in report_contract.section_markers:
         section = sections.get(section_name.casefold())
         assert section is not None, f"{template_path} lacks canonical {section_name} section fields"
         for marker in markers:
@@ -747,14 +875,12 @@ def assert_report_template_contains(skill_name: str, template_path: Path | None 
                 f"{template_path} lacks canonical {section_name} fields: {marker}"
             )
 
-    for section_name, required_fields, required_body_markers in TEMPLATE_TABLE_REQUIREMENTS[
-        skill_name
-    ]:
+    for table_contract in report_contract.table_contracts:
         _assert_table_requirements(
             template,
-            section_name,
-            required_fields,
-            required_body_markers,
+            table_contract.section_name,
+            table_contract.headers,
+            table_contract.body_markers,
             template_path,
         )
 
@@ -906,7 +1032,7 @@ def test_report_validation_ignores_canonical_labels_outside_template_block(tmp_p
     report = tmp_path / "evidence-report.md"
     outside_template = "\n".join(
         marker.casefold()
-        for _section, markers in TEMPLATE_SECTION_MARKERS["python-blackbox-testing"]
+        for _section, markers in REPORT_CONTRACTS["python-blackbox-testing"].section_markers
         for marker in markers
     )
     report.write_text(
@@ -944,7 +1070,10 @@ def test_report_validation_rejects_missing_section_or_table_markers(
     assert marker in content, f"{source} must contain marker {marker!r}"
     report.write_text(content.replace(marker, "", 1), encoding="utf-8")
 
-    with pytest.raises(AssertionError, match="lacks canonical .* fields|table fields"):
+    with pytest.raises(
+        AssertionError,
+        match="lacks canonical .* fields|table fields|column count|exact order",
+    ):
         assert_report_template_contains(skill_name, report)
 
 
@@ -957,13 +1086,13 @@ def test_table_requirements_match_normalized_header_names_exactly(tmp_path):
     copy = tmp_path / "evidence-report.md"
     copy.write_text(content.replace(original_header, adversarial_header, 1), encoding="utf-8")
 
-    with pytest.raises(AssertionError, match="Exact executions table fields"):
+    with pytest.raises(AssertionError, match="Exact executions table fields in exact order"):
         assert_report_template_contains("python-blackbox-testing", copy)
 
 
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
 def test_evidence_report_fields_are_explicit_structural_lists(skill):
-    required_fields = FIXTURE_REQUIRED_REPORT_FIELDS[skill.parent.name]
+    required_fields = REPORT_CONTRACTS[skill.parent.name].required_fixture_fields
     declared_fixtures = [
         fixture
         for fixture in load_cases(skill)
@@ -977,6 +1106,45 @@ def test_evidence_report_fields_are_explicit_structural_lists(skill):
     assert all(isinstance(field, str) and field.strip() for field in report_fields)
     assert len(report_fields) == len(set(report_fields)), "report fields must not be duplicated"
     assert set(report_fields) == required_fields
+
+
+@pytest.mark.parametrize(
+    "defect",
+    ["wrong-column-count", "duplicate-header", "extra-column", "renamed-header", "missing-body"],
+)
+def test_report_table_parser_rejects_schema_defects(tmp_path, defect):
+    source = SKILLS_ROOT / "python-blackbox-testing" / "references" / "evidence-report.md"
+    content = source.read_text(encoding="utf-8")
+    lines = content.splitlines()
+    header_index = next(
+        index
+        for index, line in enumerate(lines)
+        if line.startswith("| execution_id | scenario_ids | Environment mode | Isolation/scope")
+    )
+    exact_table_rows = tuple(lines[header_index : header_index + 3])
+    if defect == "wrong-column-count":
+        content = content.replace(
+            exact_table_rows[2],
+            exact_table_rows[2][:-1] + " | extra |",
+            1,
+        )
+    elif defect == "duplicate-header":
+        content = content.replace("execution_id | scenario_ids", "execution_id | execution_id", 1)
+    elif defect == "extra-column":
+        for row in exact_table_rows:
+            content = content.replace(row, row[:-1] + " | extra |", 1)
+    elif defect == "renamed-header":
+        content = content.replace("execution_id | scenario_ids", "renamed_id | scenario_ids", 1)
+    elif defect == "missing-body":
+        content = content.replace(exact_table_rows[2] + "\n", "", 1)
+    else:
+        raise AssertionError(f"unknown adversarial table defect: {defect}")
+
+    report = tmp_path / "evidence-report.md"
+    report.write_text(content, encoding="utf-8")
+
+    with pytest.raises(AssertionError, match="duplicate|column count|exact order|body row"):
+        assert_report_template_contains("python-blackbox-testing", report)
 
 
 def test_blackbox_evidence_fixture_checks_boundary_linkage_and_not_run_structurally():
@@ -1460,6 +1628,42 @@ def _has_explicit_approved_test_credential_contract(expected: dict[str, Any]) ->
     )
 
 
+def _assert_recursive_safety_deny_list(
+    entries: list[tuple[tuple[str, ...], str, Any]],
+    context: str,
+) -> None:
+    for path, field, value in entries:
+        if field not in SAFETY_DENY_FIELDS or field == "approved_test_credential_used":
+            continue
+        location = ".".join(path)
+        assert type(value) is bool and value is False, (
+            f"{context} cannot set unsafe safety field {location} ({field}): {value!r}"
+        )
+
+
+def _assert_approved_credential_deny_list(
+    entries: list[tuple[tuple[str, ...], str, Any]],
+    context: str,
+    approved_credential_contract: bool,
+) -> None:
+    for path, field, value in entries:
+        if field != "approved_test_credential_used":
+            continue
+        location = ".".join(path)
+        assert type(value) is bool, (
+            f"{context} requires boolean approved credential field {location}: {value!r}"
+        )
+        if value is True:
+            assert approved_credential_contract, (
+                f"{context} cannot set unsafe safety field {location} ({field}) without "
+                "the dedicated approved-test-credential contract"
+            )
+        else:
+            assert value is False, (
+                f"{context} cannot set unsafe safety field {location} ({field}): {value!r}"
+            )
+
+
 def assert_safety_fixture_contract(fixture: dict[str, Any], skill_name: str) -> None:
     fixture_id = fixture["id"]
     contract_key = (skill_name, fixture_id)
@@ -1467,7 +1671,8 @@ def assert_safety_fixture_contract(fixture: dict[str, Any], skill_name: str) -> 
     assert contract_key in SAFETY_FIXTURE_CONTRACTS, f"unknown safety fixture contract: {context}"
 
     expected = fixture["expected"]
-    contract = {**SAFETY_COMMON_FIELDS[skill_name], **SAFETY_FIXTURE_CONTRACTS[contract_key]}
+    safety_contract = SAFETY_FIXTURE_CONTRACTS[contract_key]
+    contract = {**SAFETY_COMMON_FIELDS[skill_name], **safety_contract.expected_fields}
     for field, wanted in contract.items():
         actual = expected.get(field)
         if type(wanted) is bool:
@@ -1506,16 +1711,15 @@ def assert_safety_fixture_contract(fixture: dict[str, Any], skill_name: str) -> 
         )
 
     approved_credential_contract = _has_explicit_approved_test_credential_contract(expected)
-    for path, field, value in _nested_safety_fields(expected):
-        if field in SAFETY_DENY_FIELDS and value is True:
-            if field in APPROVED_TEST_CREDENTIAL_FIELDS and approved_credential_contract:
-                continue
-            location = ".".join(path)
-            raise AssertionError(
-                f"{context} cannot set unsafe safety field {location} ({field}): {value!r}"
-            )
+    nested_entries = _nested_safety_fields(expected)
+    _assert_recursive_safety_deny_list(nested_entries, context)
+    _assert_approved_credential_deny_list(
+        nested_entries,
+        context,
+        approved_credential_contract,
+    )
 
-    if contract_key in REDACTION_ONLY_FIXTURE_KEYS:
+    if safety_contract.redaction_only:
         for field in FORBIDDEN_REDACTION_CREDENTIAL_FIELDS:
             assert field not in expected or expected[field] is False, (
                 f"{context} cannot set {field}: {expected.get(field)!r}"
@@ -1645,6 +1849,36 @@ def test_safety_contract_rejects_nested_customer_or_production_data_true_values(
     contradictory["expected"]["nested_safety_checks"] = [{"checks": {field: True}}]
 
     with pytest.raises(AssertionError, match="unsafe safety field"):
+        assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
+
+
+@pytest.mark.parametrize("unsafe_value", ["true", 1, 1.0, [], {}])
+def test_safety_contract_rejects_non_boolean_nested_deny_values(unsafe_value):
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "production-endpoint-real-token",
+    )
+    contradictory = deepcopy(fixture)
+    contradictory["expected"]["nested_safety_checks"] = [
+        {"checks": {"customer_or_production_data_accessed": unsafe_value}}
+    ]
+
+    with pytest.raises(AssertionError, match="unsafe safety field"):
+        assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
+
+
+@pytest.mark.parametrize("unsafe_value", ["true", 1])
+def test_safety_contract_rejects_non_boolean_approved_credential_values(unsafe_value):
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "approved-least-privilege-sandbox-credential",
+    )
+    contradictory = deepcopy(fixture)
+    contradictory["expected"]["nested_credential_checks"] = [
+        {"approved_test_credential_used": unsafe_value}
+    ]
+
+    with pytest.raises(AssertionError, match="boolean approved credential field"):
         assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
 
 
@@ -1784,7 +2018,7 @@ def test_blackbox_evidence_and_safety_fixture_contracts_are_complete():
     )
     assert_semantic_language(
         contract,
-        BLACKBOX_FIXTURE_CONTRACT_LANGUAGE,
+        REPORT_CONTRACTS["python-blackbox-testing"].fixture_language,
         "black-box evidence and safety fixtures",
     )
 
@@ -1797,7 +2031,7 @@ def test_parameterized_evidence_fixture_contract_is_complete():
     contract = fixture_semantic_text(evidence)
     assert_semantic_language(
         contract,
-        PARAMETERIZED_FIXTURE_CONTRACT_LANGUAGE,
+        REPORT_CONTRACTS["python-parameterized-testing"].fixture_language,
         "parameterized evidence fixtures",
     )
 
@@ -1930,19 +2164,9 @@ def _is_forbidden_direct_call(node: ast.Call, module_bindings: dict[str, tuple[s
     if not isinstance(node.func, ast.Attribute):
         return False
 
-    attribute = node.func.attr
-    dangerous_attribute = attribute in FILESYSTEM_MUTATION_METHODS or attribute in {
-        "call",
-        "check_call",
-        "check_output",
-        "Popen",
-        "run",
-        "system",
-        "popen",
-    }
-    if _is_dynamic_builtin_access(node.func):
+    if _is_dynamic_builtin_access(node.func) or _is_dunder_attribute(node.func):
         return True
-    return dangerous_attribute and _is_unsafe_receiver(node.func.value, module_bindings)
+    return node.func.attr in FORBIDDEN_UNSAFE_ATTRIBUTE_NAMES
 
 
 def _is_forbidden_alias_value(
@@ -1952,13 +2176,15 @@ def _is_forbidden_alias_value(
 ) -> bool:
     if isinstance(node, ast.Name):
         return (
-            node.id in aliases or node.id in FORBIDDEN_DIRECT_CALL_NAMES | FORBIDDEN_DYNAMIC_NAMES
+            node.id in aliases
+            or node.id in FORBIDDEN_DIRECT_CALL_NAMES
+            or node.id in FORBIDDEN_DYNAMIC_NAMES
         )
     if isinstance(node, ast.Attribute):
-        if _is_dynamic_builtin_access(node):
-            return True
-        return node.attr in FORBIDDEN_DIRECT_CALL_NAMES and _is_unsafe_receiver(
-            node.value, module_bindings
+        return (
+            _is_dynamic_builtin_access(node)
+            or _is_dunder_attribute(node)
+            or node.attr in FORBIDDEN_UNSAFE_ATTRIBUTE_NAMES
         )
     return False
 
@@ -2013,6 +2239,12 @@ def ast_contract_violations(source: str) -> list[str]:
     for node in ast.walk(tree):
         if _is_dunder_attribute(node) or (isinstance(node, ast.Name) and node.id == "__builtins__"):
             violations.append("forbidden dunder access")
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr in FORBIDDEN_UNSAFE_ATTRIBUTE_NAMES
+            and not _is_dunder_attribute(node)
+        ):
+            violations.append("forbidden unsafe attribute access")
         if (isinstance(node, ast.Attribute) and node.attr in FORBIDDEN_FRAME_GLOBAL_NAMES) or (
             isinstance(node, ast.Name) and node.id in FORBIDDEN_FRAME_GLOBAL_NAMES
         ):
@@ -2065,6 +2297,8 @@ def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
         "writer = open\nwriter('secret.txt')\n",
         "loader = __import__\nloader('os').system('echo unsafe')\n",
         "runner = eval\nrunner('1 + 1')\n",
+        "import argparse\nwriter = argparse._os.system\nwriter('echo unsafe')\n",
+        "import argparse\nshim = argparse._os\nwriter = shim.system\nwriter('echo unsafe')\n",
     ],
     ids=[
         "sys-modules",
@@ -2082,6 +2316,8 @@ def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
         "aliased-open",
         "aliased-import",
         "aliased-eval",
+        "argparse-os-system-alias",
+        "argparse-os-shim-alias",
     ],
 )
 def test_ast_contract_rejects_indirect_module_and_dynamic_access(source):
@@ -2094,7 +2330,7 @@ def test_ast_contract_allows_normal_sys_import_without_dynamic_module_access():
     assert ast_contract_violations(source) == []
 
 
-def test_ast_contract_allows_harmless_attributes_with_dangerous_api_names():
+def test_ast_contract_rejects_unsafe_attributes_regardless_of_receiver_root():
     source = """
 service.open('read-only')
 queue.remove(item)
@@ -2102,4 +2338,14 @@ runner.run(training_config)
 service.system('local test double')
 """
 
-    assert ast_contract_violations(source) == []
+    assert ast_contract_violations(source)
+
+
+def test_ast_contract_rejects_alias_chain_through_an_unsafe_module_attribute():
+    source = """
+shim = object._os
+writer = shim.system
+writer('echo unsafe')
+"""
+
+    assert ast_contract_violations(source)
