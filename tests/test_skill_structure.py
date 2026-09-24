@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from collections.abc import Iterator
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -48,6 +49,14 @@ MARKDOWN_REFERENCE_DEFINITION = re.compile(
 MARKDOWN_REFERENCE_USAGE = re.compile(
     r"(?<!!)\[([^\]\r\n]+)\](?:\[([^\]\r\n]*)\]|(?!\())",
     re.IGNORECASE,
+)
+MARKDOWN_FENCE_START = re.compile(
+    r"^[ \t]{0,3}(?P<fence>`{3,}|~{3,})[^\r\n]*$",
+    re.MULTILINE,
+)
+INLINE_CODE = re.compile(
+    r"(?<!`)(?P<ticks>`+)(?!`).*?(?<!`)(?P=ticks)(?!`)",
+    re.DOTALL,
 )
 ASSET_PATH = re.compile(
     r"(?<![\w.-])((?:references|scripts)/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.(?:md|py))"
@@ -266,6 +275,20 @@ def repository_markdown_files(repository_root: Path = ROOT) -> list[Path]:
     )
 
 
+def tracked_markdown_files(repository_root: Path = ROOT) -> list[Path]:
+    result = subprocess.run(
+        ["git", "-C", str(repository_root), "ls-files", "-z", "--", "*.md"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return sorted(
+        repository_root / relative_path
+        for relative_path in result.stdout.split("\0")
+        if relative_path
+    )
+
+
 def parse_frontmatter(path: Path) -> dict[str, object]:
     """Parse the small, portable frontmatter subset used by these skills.
 
@@ -359,6 +382,50 @@ def _reference_definitions(markdown: str) -> dict[str, str]:
     return definitions
 
 
+def _markdown_code_ranges(markdown: str) -> list[tuple[int, int]]:
+    ranges: list[tuple[int, int]] = []
+    fence: tuple[str, int] | None = None
+    fence_start = 0
+    offset = 0
+    for line in markdown.splitlines(keepends=True):
+        fence_match = MARKDOWN_FENCE_START.match(line.rstrip("\r\n"))
+        if fence is None:
+            if fence_match is not None:
+                fence_token = fence_match.group("fence")
+                fence = (fence_token[0], len(fence_token))
+                fence_start = offset
+        else:
+            fence_character, minimum_length = fence
+            closing_fence = re.fullmatch(
+                rf"[ \t]{{0,3}}{re.escape(fence_character)}{{{minimum_length},}}[ \t]*",
+                line.rstrip("\r\n"),
+            )
+            if closing_fence is not None:
+                ranges.append((fence_start, offset + len(line)))
+                fence = None
+        offset += len(line)
+
+    if fence is not None:
+        ranges.append((fence_start, len(markdown)))
+
+    for match in INLINE_CODE.finditer(markdown):
+        if not any(start <= match.start() < end for start, end in ranges):
+            ranges.append((match.start(), match.end()))
+    return sorted(ranges)
+
+
+def _is_markdown_code(markdown: str, position: int, code_ranges: list[tuple[int, int]]) -> bool:
+    return any(start <= position < end for start, end in code_ranges)
+
+
+def _is_standalone_shortcut_reference(markdown: str, start: int, end: int) -> bool:
+    line_start = markdown.rfind("\n", 0, start) + 1
+    line_end = markdown.find("\n", end)
+    if line_end == -1:
+        line_end = len(markdown)
+    return not markdown[line_start:start].strip() and not markdown[end:line_end].strip()
+
+
 def _is_heading_label(markdown: str, start: int) -> bool:
     line_start = markdown.rfind("\n", 0, start) + 1
     return re.match(r"^[ \t]{0,3}#{1,6}(?:[ \t]+|$)", markdown[line_start:start]) is not None
@@ -366,7 +433,10 @@ def _is_heading_label(markdown: str, start: int) -> bool:
 
 def unresolved_markdown_references(markdown: str) -> Iterator[str]:
     definitions = _reference_definitions(markdown)
+    code_ranges = _markdown_code_ranges(markdown)
     for match in MARKDOWN_REFERENCE_USAGE.finditer(markdown):
+        if _is_markdown_code(markdown, match.start(), code_ranges):
+            continue
         if _is_heading_label(markdown, match.start()):
             continue
         if markdown[match.end() :].lstrip().startswith(":"):
@@ -377,7 +447,13 @@ def unresolved_markdown_references(markdown: str) -> Iterator[str]:
         label = (
             link_text if explicit_label is None or not explicit_label.strip() else explicit_label
         )
-        if explicit_label is not None and _normalize_reference_label(label) not in definitions:
+        if explicit_label is not None:
+            is_reference = True
+        else:
+            is_reference = _is_standalone_shortcut_reference(markdown, match.start(), match.end())
+        if not label:
+            continue
+        if is_reference and _normalize_reference_label(label) not in definitions:
             yield label
 
 
@@ -386,7 +462,10 @@ def markdown_targets(markdown: str) -> Iterator[str]:
         yield match.group(1) or match.group(2)
 
     definitions = _reference_definitions(markdown)
+    code_ranges = _markdown_code_ranges(markdown)
     for match in MARKDOWN_REFERENCE_USAGE.finditer(markdown):
+        if _is_markdown_code(markdown, match.start(), code_ranges):
+            continue
         if _is_heading_label(markdown, match.start()):
             continue
         if markdown[match.end() :].lstrip().startswith(":"):
@@ -750,6 +829,27 @@ def test_repository_markdown_files_exclude_generated_and_cache_directories(tmp_p
     assert repository_markdown_files(tmp_path) == [retained]
 
 
+def test_all_tracked_markdown_reference_labels_resolve():
+    missing_targets: list[str] = []
+    unresolved_labels: list[str] = []
+
+    for source in tracked_markdown_files():
+        text = source.read_text(encoding="utf-8")
+        source_name = source.relative_to(ROOT).as_posix()
+        for target in markdown_targets(text):
+            resolved = local_link_target(source, target)
+            if resolved is not None and not resolved.exists():
+                missing_targets.append(f"{source_name} -> {target}")
+        unresolved_labels.extend(
+            f"{source_name} -> {label}" for label in unresolved_markdown_references(text)
+        )
+
+    assert not unresolved_labels, "unresolved Markdown reference labels:\n" + "\n".join(
+        unresolved_labels
+    )
+    assert not missing_targets, "missing local Markdown targets:\n" + "\n".join(missing_targets)
+
+
 def test_all_relative_markdown_links_resolve():
     missing_targets: list[str] = []
     markdown_files = repository_markdown_files()
@@ -860,14 +960,44 @@ def test_markdown_reference_titles_ignore_decoy_paths(tmp_path, definition):
     assert not (references / "actual.md").exists()
 
 
-def test_markdown_targets_report_missing_full_and_collapsed_references():
-    markdown = "[missing full][absent-label]\n[missing collapsed][]\n[ordinary bracket text]\n"
+def test_markdown_targets_report_missing_full_collapsed_and_shortcut_references():
+    markdown = (
+        "[missing full][absent-label]\n"
+        "[missing collapsed][]\n"
+        "[missing]\n"
+        "ordinary [bracket text] in prose\n"
+    )
 
     assert list(markdown_targets(markdown)) == []
     assert list(unresolved_markdown_references(markdown)) == [
         "absent-label",
         "missing collapsed",
+        "missing",
     ]
+
+
+def test_markdown_reference_resolution_accepts_valid_reference_forms_and_ignores_code():
+    markdown = """
+[full text][full-label]
+[collapsed text][]
+[shortcut text]
+ordinary [bracket text] in prose
+
+[full-label]: references/full.md
+[collapsed text]: references/collapsed.md
+[shortcut text]: references/shortcut.md
+`[code text]`
+```text
+[code reference]
+```
+"""
+
+    assert list(markdown_targets(markdown)) == [
+        "references/full.md",
+        "references/collapsed.md",
+        "references/shortcut.md",
+    ]
+    assert list(unresolved_markdown_references(markdown)) == []
 
 
 def test_unresolved_reference_label_is_not_resolved_as_a_sibling_file(tmp_path):
@@ -878,7 +1008,7 @@ def test_unresolved_reference_label_is_not_resolved_as_a_sibling_file(tmp_path):
 
     markdown = source.read_text(encoding="utf-8")
     assert list(markdown_targets(markdown)) == []
-    assert list(unresolved_markdown_references(markdown)) == ["README", "missing"]
+    assert list(unresolved_markdown_references(markdown)) == ["README", "missing", "shortcut"]
 
 
 def test_reference_style_markdown_links_resolve_case_insensitively_and_report_missing_targets(

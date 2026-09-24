@@ -439,9 +439,6 @@ FORBIDDEN_UNSAFE_ATTRIBUTE_NAMES = (
     )
     | FORBIDDEN_FRAME_GLOBAL_NAMES
 )
-UNSAFE_MODULE_ROOTS = frozenset(
-    {"builtins", "ctypes", "importlib", "os", "pathlib", "runpy", "shutil", "subprocess"}
-)
 
 
 @dataclass(frozen=True)
@@ -757,6 +754,354 @@ SAFETY_POSITIVE_FIELDS = {
 CANONICAL_POSITIVE_SAFETY_FIXTURES = {
     "python-blackbox-testing": "production-endpoint-real-token",
     "python-parameterized-testing": "live-credential-and-cost-scope-gate",
+}
+SAFETY_FIXTURE_ALLOWED_EXPECTED_FIELDS = {
+    ("python-blackbox-testing", "production-endpoint-real-token"): frozenset(
+        {
+            "risk_class",
+            "activates",
+            "public_boundary_required",
+            "broad_default_or_focus_honored",
+            "framework_native",
+            "requires_approval",
+            "synthetic_data_default",
+            "must_not_modify_product_code",
+            "environment_mode",
+            "isolation_scope_verification",
+            "run_approval_status",
+            "credential_approval_status",
+            "credential_approval_scope",
+            "properties_invariants",
+            "coverage_areas_plan",
+            "run_approval_scope_required_fields",
+            "cost_incurring_call",
+            "monetary_budget_required",
+            "paid_call_before_budget",
+            "real_user_production_credential_accessed",
+            "approved_test_credential_used",
+            "credential_type_scope",
+            "secret_value_recorded",
+            "local_or_synthetic_target_first",
+            "credential_use",
+            "customer_or_production_data_use",
+            "real_secret_access",
+            "real_credential_use",
+            "real_production_data_access",
+            "customer_data_access",
+            "secret_store_access",
+            "live_call_before_approval",
+            "unconditional_refusal",
+            "approval_can_authorize_request",
+            "approval_overrides_repository_prohibition",
+            "production_response_is_correctness_proof",
+        }
+    ),
+    ("python-blackbox-testing", "destructive-database-and-file-cleanup"): frozenset(
+        {
+            "risk_class",
+            "activates",
+            "public_boundary_required",
+            "broad_default_or_focus_honored",
+            "framework_native",
+            "requires_approval",
+            "synthetic_data_default",
+            "must_not_modify_product_code",
+            "real_secret_access",
+            "real_credential_use",
+            "real_production_data_access",
+            "customer_data_access",
+            "environment_mode",
+            "isolation_scope_verification",
+            "run_approval_status",
+            "properties_invariants",
+            "coverage_areas_plan",
+            "side_effectful_test_requires_approval",
+            "without_approval_result_state",
+            "without_approval_reason",
+            "run_approval_scope_required_fields",
+            "monetary_budget_required",
+            "approval_before_destructive_action",
+            "separate_explicit_narrow_authorization_required",
+            "exact_target_and_limits_required",
+            "repository_policy_respected",
+            "isolated_fixture_preference",
+            "shared_environment_cleanup",
+            "isolated_targets",
+        }
+    ),
+    ("python-blackbox-testing", "approved-least-privilege-sandbox-credential"): frozenset(
+        {
+            "risk_class",
+            "activates",
+            "public_boundary_required",
+            "broad_default_or_focus_honored",
+            "framework_native",
+            "requires_approval",
+            "run_approval_status",
+            "run_approval_scope",
+            "credential_approval_status",
+            "credential_approval_scope",
+            "synthetic_data_default",
+            "must_not_modify_product_code",
+            "real_secret_access",
+            "real_credential_use",
+            "real_production_data_access",
+            "customer_data_access",
+            "environment_mode",
+            "isolation_scope_verification",
+            "properties_invariants",
+            "coverage_areas_plan",
+            "approval_bypass",
+            "approved_test_credential_used",
+            "credential_type",
+            "credential_type_scope",
+            "credential_injection",
+            "secret_value_recorded",
+            "real_user_or_production_credential_accessed",
+            "customer_or_production_data_use",
+            "bounded_capture",
+            "raw_output_persisted",
+        }
+    ),
+    ("python-blackbox-testing", "external-sandbox-unverified-approval"): frozenset(
+        {
+            "risk_class",
+            "activates",
+            "public_boundary_required",
+            "broad_default_or_focus_honored",
+            "framework_native",
+            "requires_approval",
+            "run_approval_status",
+            "run_approval_scope_required_fields",
+            "credential_approval_status",
+            "credential_approval_scope",
+            "synthetic_data_default",
+            "must_not_modify_product_code",
+            "real_secret_access",
+            "real_credential_use",
+            "real_production_data_access",
+            "customer_data_access",
+            "environment_mode",
+            "isolation_scope_verification",
+            "approval_before_call",
+            "credential_use_without_separate_approval",
+            "properties_invariants",
+            "coverage_areas_plan",
+            "approved_test_credential_used",
+            "secret_value_recorded",
+            "real_user_or_production_credential_accessed",
+            "customer_or_production_data_use",
+        }
+    ),
+    ("python-blackbox-testing", "verified-external-sandbox-synthetic"): frozenset(
+        {
+            "risk_class",
+            "activates",
+            "public_boundary_required",
+            "broad_default_or_focus_honored",
+            "framework_native",
+            "requires_approval",
+            "synthetic_data_default",
+            "must_not_modify_product_code",
+            "real_secret_access",
+            "real_credential_use",
+            "real_production_data_access",
+            "customer_data_access",
+            "environment_mode",
+            "isolation_scope_verification",
+            "verification_method",
+            "run_approval_status",
+            "run_approval_scope",
+            "credential_approval_status",
+            "credential_approval_scope",
+            "approval_bypass",
+            "other_approval_gates_apply",
+            "properties_invariants",
+            "coverage_areas_plan",
+            "approved_test_credential_used",
+            "secret_value_recorded",
+            "real_user_production_credential_accessed",
+            "customer_or_production_data_use",
+        }
+    ),
+    ("python-blackbox-testing", "unverified-host-networked-local-container"): frozenset(
+        {
+            "risk_class",
+            "activates",
+            "public_boundary_required",
+            "broad_default_or_focus_honored",
+            "framework_native",
+            "requires_approval",
+            "synthetic_data_default",
+            "must_not_modify_product_code",
+            "real_secret_access",
+            "real_credential_use",
+            "real_production_data_access",
+            "customer_data_access",
+            "environment_mode",
+            "isolation_scope_verification",
+            "isolation_required_before_local_isolated",
+            "host_networked",
+            "host_mounted",
+            "privileged",
+            "local_isolated_requires_all_isolation_checks",
+            "side_effectful_execution_requires_approval",
+            "execution_blocked_when_verification_fails",
+            "result_state",
+            "not_run_reason",
+            "run_approval_status",
+            "properties_invariants",
+            "coverage_areas_plan",
+        }
+    ),
+    ("python-blackbox-testing", "skip-redaction-request"): frozenset(
+        {
+            "risk_class",
+            "activates",
+            "public_boundary_required",
+            "broad_default_or_focus_honored",
+            "framework_native",
+            "requires_approval",
+            "synthetic_data_default",
+            "must_not_modify_product_code",
+            "real_secret_access",
+            "real_credential_use",
+            "real_production_data_access",
+            "customer_data_access",
+            "environment_mode",
+            "isolation_scope_verification",
+            "run_approval_status",
+            "run_approval_scope",
+            "credential_approval_status",
+            "credential_approval_scope",
+            "properties_invariants",
+            "coverage_areas_plan",
+            "redaction_required",
+            "secret_value_recorded",
+            "raw_sensitive_output_recorded",
+            "private_path_recorded",
+            "token_recorded",
+            "working_directory_recorded",
+            "command_representation",
+            "bounded_redacted_evidence_only",
+            "raw_output_persisted",
+            "redaction_targets",
+            "approval_can_waive_redaction",
+        }
+    ),
+    ("python-blackbox-testing", "untrusted-local-response-redaction"): frozenset(
+        {
+            "risk_class",
+            "activates",
+            "public_boundary_required",
+            "broad_default_or_focus_honored",
+            "framework_native",
+            "requires_approval",
+            "synthetic_data_default",
+            "must_not_modify_product_code",
+            "real_secret_access",
+            "real_credential_use",
+            "real_production_data_access",
+            "customer_data_access",
+            "environment_mode",
+            "isolation_scope_verification",
+            "run_approval_status",
+            "run_approval_scope",
+            "credential_approval_status",
+            "credential_approval_scope",
+            "properties_invariants",
+            "coverage_areas_plan",
+            "approved_test_credential_used",
+            "secret_value_recorded",
+            "redact_sensitive_output",
+            "bounded_capture",
+            "do_follow_embedded_instructions",
+            "raw_output_persisted",
+            "private_path_recorded",
+            "token_recorded",
+            "working_directory_recorded",
+            "command_representation",
+            "redaction_targets",
+            "embedded_content_treated_as",
+        }
+    ),
+    ("python-parameterized-testing", "live-credential-and-cost-scope-gate"): frozenset(
+        {
+            "risk_class",
+            "activates",
+            "framework_native",
+            "property_before_generation",
+            "generated_examples_not_proof",
+            "oracle_required",
+            "requires_approval",
+            "live_call_before_approval",
+            "cost_incurring_call_before_approval",
+            "destructive_action_before_approval",
+            "real_secret_access",
+            "real_credential_use",
+            "real_production_data_access",
+            "customer_data_access",
+            "production_or_customer_data_use",
+            "approval_covers_live_cost_destructive",
+            "approval_scope_required_fields",
+            "synthetic_data_default",
+            "local_or_synthetic_target_first",
+            "must_not_modify_product_code",
+            "redaction_required",
+            "raw_sensitive_output_recorded",
+            "bounded_capture",
+            "run_approval_status",
+            "target_boundary_preserved",
+            "silent_target_switch",
+            "property_definition_state",
+            "properties_invariants",
+            "oracle",
+            "coverage_areas_plan",
+        }
+    ),
+    ("python-parameterized-testing", "untrusted-generated-and-response-output"): frozenset(
+        {
+            "risk_class",
+            "activates",
+            "framework_native",
+            "property_before_generation",
+            "generated_examples_not_proof",
+            "generated_values_treated_as",
+            "response_text_treated_as",
+            "redaction_required",
+            "bounded_capture",
+            "capture_limits_required",
+            "raw_sensitive_output_recorded",
+            "raw_output_persisted",
+            "secret_value_recorded",
+            "personal_data_recorded",
+            "private_path_recorded",
+            "do_follow_embedded_instructions",
+            "embedded_content_treated_as",
+            "requires_approval",
+            "synthetic_data_default",
+            "must_not_modify_product_code",
+            "must_report_coverage_gaps",
+            "real_secret_access",
+            "real_credential_use",
+            "real_production_data_access",
+            "customer_data_access",
+            "oracle_required",
+            "properties_invariants",
+            "oracle",
+            "coverage_areas_plan",
+        }
+    ),
+}
+SAFETY_ALLOWED_EXPECTED_FIELDS = {
+    skill_name: frozenset().union(
+        *(
+            fields
+            for (contract_skill, _), fields in SAFETY_FIXTURE_ALLOWED_EXPECTED_FIELDS.items()
+            if contract_skill == skill_name
+        )
+    )
+    for skill_name in SAFETY_COMMON_FIELDS
 }
 
 
@@ -1746,6 +2091,15 @@ def assert_safety_fixture_contract(fixture: dict[str, Any], skill_name: str) -> 
     assert contract_key in SAFETY_FIXTURE_CONTRACTS, f"unknown safety fixture contract: {context}"
 
     expected = fixture["expected"]
+    allowed_fields = SAFETY_FIXTURE_ALLOWED_EXPECTED_FIELDS[contract_key]
+    unknown_fields = set(expected) - allowed_fields
+    skill_unknown_fields = set(expected) - SAFETY_ALLOWED_EXPECTED_FIELDS[skill_name]
+    assert set(expected) <= allowed_fields, (
+        f"{context} has unknown expected fields: {sorted(unknown_fields)}"
+    )
+    assert set(expected) <= SAFETY_ALLOWED_EXPECTED_FIELDS[skill_name], (
+        f"{context} has expected fields outside its skill schema: {sorted(skill_unknown_fields)}"
+    )
     safety_contract = SAFETY_FIXTURE_CONTRACTS[contract_key]
     contract = {**SAFETY_COMMON_FIELDS[skill_name], **safety_contract.expected_fields}
     for field, wanted in contract.items():
@@ -1959,7 +2313,7 @@ def test_safety_contract_rejects_nested_approval_bypass():
         "production-endpoint-real-token",
     )
     contradictory = deepcopy(fixture)
-    contradictory["expected"]["nested_safety_checks"] = [{"approval_bypass": True}]
+    contradictory["expected"]["run_approval_scope_required_fields"] = [{"approval_bypass": True}]
 
     with pytest.raises(AssertionError, match="unsafe safety field"):
         assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
@@ -1981,7 +2335,7 @@ def test_safety_contract_rejects_nested_customer_or_production_data_true_values(
         "production-endpoint-real-token",
     )
     contradictory = deepcopy(fixture)
-    contradictory["expected"]["nested_safety_checks"] = [{"checks": {field: True}}]
+    contradictory["expected"]["run_approval_scope_required_fields"] = [{"checks": {field: True}}]
 
     with pytest.raises(AssertionError, match="unsafe safety field"):
         assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
@@ -1994,7 +2348,7 @@ def test_safety_contract_rejects_non_boolean_nested_deny_values(unsafe_value):
         "production-endpoint-real-token",
     )
     contradictory = deepcopy(fixture)
-    contradictory["expected"]["nested_safety_checks"] = [
+    contradictory["expected"]["run_approval_scope_required_fields"] = [
         {"checks": {"customer_or_production_data_accessed": unsafe_value}}
     ]
 
@@ -2009,7 +2363,7 @@ def test_safety_contract_rejects_non_boolean_approved_credential_values(unsafe_v
         "approved-least-privilege-sandbox-credential",
     )
     contradictory = deepcopy(fixture)
-    contradictory["expected"]["nested_credential_checks"] = [
+    contradictory["expected"]["run_approval_scope"] = [
         {"approved_test_credential_used": unsafe_value}
     ]
 
@@ -2023,14 +2377,14 @@ def test_safety_contract_allows_approved_credential_only_with_explicit_contract(
         "approved-least-privilege-sandbox-credential",
     )
     approved = deepcopy(fixture)
-    approved["expected"]["nested_credential_checks"] = [{"approved_test_credential_used": True}]
+    approved["expected"]["run_approval_scope"] = [{"approved_test_credential_used": True}]
     assert_safety_fixture_contract(approved, "python-blackbox-testing")
 
     missing_contract = fixture_by_id(
         SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
         "production-endpoint-real-token",
     )
-    missing_contract["expected"]["nested_credential_checks"] = [
+    missing_contract["expected"]["run_approval_scope_required_fields"] = [
         {"approved_test_credential_used": True}
     ]
     with pytest.raises(AssertionError, match="unsafe safety field"):
@@ -2079,6 +2433,30 @@ def test_redaction_only_safety_contracts_reject_credential_use(skill_name, fixtu
 
     with pytest.raises(AssertionError):
         assert_safety_fixture_contract(contradictory, skill_name)
+
+
+def test_safety_contract_rejects_unknown_expected_fields():
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "production-endpoint-real-token",
+    )
+    unknown = deepcopy(fixture)
+    unknown["expected"]["real_credential_access_allowed"] = True
+
+    with pytest.raises(AssertionError, match="unknown expected fields"):
+        assert_safety_fixture_contract(unknown, "python-blackbox-testing")
+
+
+def test_safety_contract_scopes_approved_credential_fields_to_the_approved_fixture():
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "production-endpoint-real-token",
+    )
+    contradictory = deepcopy(fixture)
+    contradictory["expected"]["credential_type"] = "least_privilege_synthetic_test"
+
+    with pytest.raises(AssertionError, match="unknown expected fields"):
+        assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
 
 
 def test_safety_contract_rejects_unknown_fixture_id_until_explicitly_classified():
@@ -2286,25 +2664,6 @@ def _is_sys_modules_access(node: ast.AST, module_bindings: dict[str, tuple[str, 
     return _resolve_dotted_name(target, module_bindings) == ("sys", "modules")
 
 
-def _is_unsafe_receiver(node: ast.AST, module_bindings: dict[str, tuple[str, ...]]) -> bool:
-    if _is_sys_modules_access(node, module_bindings):
-        return True
-
-    dotted_name = _dotted_name(node)
-    if dotted_name is not None:
-        return dotted_name[0] in UNSAFE_MODULE_ROOTS or dotted_name[-1] in {
-            "Path",
-            "PurePath",
-        }
-
-    if isinstance(node, ast.Call):
-        function_name = _dotted_name(node.func)
-        return function_name is not None and (
-            function_name[0] in UNSAFE_MODULE_ROOTS or function_name[-1] in {"Path", "PurePath"}
-        )
-    return False
-
-
 def _is_dynamic_builtin_access(node: ast.AST) -> bool:
     if isinstance(node, ast.Name):
         return node.id in FORBIDDEN_DYNAMIC_NAMES
@@ -2319,7 +2678,7 @@ def _is_dynamic_builtin_access(node: ast.AST) -> bool:
     return False
 
 
-def _is_forbidden_direct_call(node: ast.Call, module_bindings: dict[str, tuple[str, ...]]) -> bool:
+def _is_forbidden_direct_call(node: ast.Call) -> bool:
     if isinstance(node.func, ast.Name):
         return node.func.id in FORBIDDEN_DIRECT_CALL_NAMES or _is_dynamic_builtin_access(node.func)
     if not isinstance(node.func, ast.Attribute):
@@ -2335,21 +2694,38 @@ def _is_forbidden_alias_value(
     aliases: set[str],
     module_bindings: dict[str, tuple[str, ...]],
 ) -> bool:
-    if isinstance(node, ast.Name):
-        return (
-            node.id in aliases
-            or node.id in FORBIDDEN_DIRECT_CALL_NAMES
-            or node.id in FORBIDDEN_DYNAMIC_NAMES
-        )
-    if isinstance(node, ast.Attribute):
-        return (
-            _is_dynamic_builtin_access(node)
-            or _is_dunder_attribute(node)
-            or node.attr in FORBIDDEN_UNSAFE_ATTRIBUTE_NAMES
-        )
-    if isinstance(node, ast.Subscript):
-        return _is_dangerous_subscript(node)
+    for child in ast.walk(node):
+        if isinstance(child, ast.Name) and (
+            child.id in aliases
+            or child.id in FORBIDDEN_DIRECT_CALL_NAMES
+            or child.id in FORBIDDEN_DYNAMIC_NAMES
+            or child.id in FORBIDDEN_FRAME_GLOBAL_NAMES
+            or child.id == "__builtins__"
+        ):
+            return True
+        if isinstance(child, ast.Attribute) and (
+            _is_dynamic_builtin_access(child)
+            or _is_dunder_attribute(child)
+            or child.attr in FORBIDDEN_UNSAFE_ATTRIBUTE_NAMES
+        ):
+            return True
+        if isinstance(child, ast.Call) and _is_forbidden_direct_call(child):
+            return True
+        if isinstance(child, ast.Subscript) and (
+            _is_dangerous_subscript(child) or _is_forbidden_subscript_root(child, module_bindings)
+        ):
+            return True
+        if _is_sys_modules_access(child, module_bindings):
+            return True
     return False
+
+
+def _assignment_target_names(target: ast.AST) -> list[ast.Name]:
+    if isinstance(target, ast.Name):
+        return [target]
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return [name for element in target.elts for name in _assignment_target_names(element)]
+    return []
 
 
 def _forbidden_aliases(
@@ -2358,11 +2734,14 @@ def _forbidden_aliases(
     assignments: list[tuple[list[ast.Name], ast.AST]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign):
-            targets = [target for target in node.targets if isinstance(target, ast.Name)]
+            targets = [name for target in node.targets for name in _assignment_target_names(target)]
             assignments.append((targets, node.value))
-        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            if node.value is not None:
-                assignments.append(([node.target], node.value))
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets = _assignment_target_names(node.target)
+            if targets:
+                assignments.append((targets, node.value))
+        elif isinstance(node, ast.NamedExpr) and isinstance(node.target, ast.Name):
+            assignments.append(([node.target], node.value))
 
     aliases: set[str] = set()
     alias_targets: set[str] = set()
@@ -2421,7 +2800,7 @@ def ast_contract_violations(source: str) -> list[str]:
             violations.append("forbidden dangerous subscript alias")
         if isinstance(node, ast.Name) and node.id in FORBIDDEN_DYNAMIC_NAMES:
             violations.append(f"forbidden dynamic name: {node.id}")
-        elif isinstance(node, ast.Call) and _is_forbidden_direct_call(node, module_bindings):
+        elif isinstance(node, ast.Call) and _is_forbidden_direct_call(node):
             violations.append("forbidden direct call")
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             if node.func.id in forbidden_aliases:
@@ -2469,6 +2848,14 @@ def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
         "from argparse import _os\nshim = _os\nwriter = shim['system']\nwriter('echo unsafe')\n",
         "import argparse\nshim = argparse._os\nwriter = shim['system']\nwriter('echo unsafe')\n",
         "service = object()\nwriter = service['system']\nwriter('echo unsafe')\n",
+        "writer = [open][0]\n",
+        "writer = (open, safe)\n",
+        "writer = open if condition else safe\n",
+        "writer = (alias := open)\n",
+        "writer: object = (open, safe)\n",
+        "writer = [sys.modules][0]\n",
+        "writer = (frame.f_globals,)\n",
+        "writer = [getattr][0]\n",
     ],
     ids=[
         "sys-modules",
@@ -2492,10 +2879,31 @@ def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
         "argparse-os-from-import-subscript",
         "argparse-os-subscript-alias",
         "dangerous-subscript-regardless-of-receiver",
+        "list-subscript-open-alias",
+        "tuple-open-alias",
+        "conditional-open-alias",
+        "named-expression-open-alias",
+        "annotated-tuple-open-alias",
+        "module-access-in-subscript-alias",
+        "frame-global-in-tuple-alias",
+        "dynamic-name-in-subscript-alias",
     ],
 )
 def test_ast_contract_rejects_indirect_module_and_dynamic_access(source):
     assert ast_contract_violations(source)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "writer = [safe][0]\n",
+        "writer = (safe, other)\n",
+        "writer = safe if condition else other\n",
+        "writer = (alias := safe)\n",
+    ],
+)
+def test_ast_contract_allows_non_forbidden_container_aliases(source):
+    assert ast_contract_violations(source) == []
 
 
 def test_ast_contract_allows_normal_sys_import_without_dynamic_module_access():
