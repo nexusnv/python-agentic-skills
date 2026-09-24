@@ -119,44 +119,41 @@ Run the checks that apply to the current checkout from the repository root:
 
 ```bash
 uv sync --locked --group dev
-python -m json.tool skills.sh.json >/dev/null
+uv run --group dev python -m json.tool skills.sh.json >/dev/null
 uv run --group dev ruff check .
 uv run --group dev ruff format --check .
 git diff --check
 ```
 
-The current checkout has no skill directories or `tests/` files, so do not claim discovery, fixture,
-or test results until those files are added. After the skill directories are added, run the local
-skills.sh discovery smoke test:
+Run the local skills.sh discovery smoke test to confirm both skills are discoverable:
 
 ```bash
 npx skills add . --list
 ```
 
-After the planned `evals/cases.yaml` files are added, parse every fixture with the development-only
-PyYAML dependency:
+Parse every fixture with the development-only PyYAML dependency:
 
 ```bash
 uv run --group dev python -c 'from pathlib import Path; import yaml; files = sorted(Path(".agents/skills").rglob("evals/cases.yaml")); assert files, "no eval fixtures found"; [yaml.safe_load(path.read_text()) for path in files]'
 ```
 
-After `tests/test_skill_structure.py` is added as planned, run the structural/link test explicitly:
+Run the structural/link test explicitly:
 
 ```bash
 uv run --group dev pytest tests/test_skill_structure.py
 ```
 
-That future test is responsible for validating skill metadata, required files, and relative Markdown
-links. Once the skills and test files are added, run the complete future repository test suite:
+That test is responsible for validating skill metadata, required files, and relative Markdown links.
+Run the complete repository test suite:
 
 ```bash
 uv run --group dev pytest
 ```
 
-This command covers the structural, quality-contract, case-matrix, and future tests. The current
-checkout has no `tests/` files, so the command currently reports no tests collected; do not treat that
-as a passing suite. The `npx skills add . --list` quick-start is intentionally unpinned; CI should pin a
-verified skills CLI version after compatibility verification rather than guessing a version.
+This command covers the structural, quality-contract, and case-matrix tests. The human-facing
+`npx skills add . --list` quick-start stays intentionally unpinned; CI instead pins the verified skills
+CLI version (`skills@1.7.0`, verified against the npm registry on 2026-09-24) in
+`.github/workflows/ci.yml` rather than using a floating invocation.
 
 The repository targets Python 3.10 and newer. The official `skills-ref` validator currently requires
 Python 3.11 or newer, so keep that version isolated to the validator step; do not raise the Python

@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Quality (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12", "3.13"]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install locked development dependencies
+        run: uv sync --locked --group dev
+
+      - name: Ruff lint
+        run: uv run --group dev ruff check .
+
+      - name: Ruff format check
+        run: uv run --group dev ruff format --check .
+
+      - name: Pytest
+        run: uv run --group dev pytest
+
+      - name: Git whitespace check
+        run: git diff --check
+
+      # skills-ref requires Python >=3.11, so the 3.10 matrix job must skip it.
+      # uvx isolates its own 3.11 interpreter from the matrix interpreter.
+      - name: Official Agent Skills validators
+        if: matrix.python-version != '3.10'
+        run: |
+          uvx --python 3.11 --from skills-ref agentskills validate .agents/skills/python-blackbox-testing
+          uvx --python 3.11 --from skills-ref agentskills validate .agents/skills/python-parameterized-testing
+
+      - name: skills.sh.json syntax
+        run: uv run --group dev python -m json.tool skills.sh.json >/dev/null
+
+  skills-smoke:
+    # Separate job so a skills.sh or npm outage does not mask Python test results.
+    name: skills.sh discovery smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Cache the pinned skills CLI package
+        uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: npm-skills-cli-1.7.0
+
+      - name: skills.sh discovery smoke (pinned skills CLI)
+        run: |
+          set -euo pipefail
+          raw="$RUNNER_TEMP/skills-list.raw"
+          plain="$RUNNER_TEMP/skills-list.txt"
+          # --list only lists repository skills; it never installs anything.
+          if ! npx --yes skills@1.7.0 add . --list | tee "$raw"; then
+            echo "::error::skills.sh discovery command failed"
+            exit 1
+          fi
+          # The CLI renders ANSI color/control codes; strip them before matching names.
+          sed -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' "$raw" > "$plain"
+          status=0
+          for skill in python-blackbox-testing python-parameterized-testing; do
+            if grep -Fq "$skill" "$plain"; then
+              echo "OK: $skill is listed by skills.sh discovery"
+            else
+              echo "::error::skills.sh discovery output does not contain $skill"
+              status=1
+            fi
+          done
+          exit "$status"
