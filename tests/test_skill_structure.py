@@ -52,6 +52,23 @@ MARKDOWN_REFERENCE_USAGE = re.compile(
 ASSET_PATH = re.compile(
     r"(?<![\w.-])((?:references|scripts)/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.(?:md|py))"
 )
+EXCLUDED_MARKDOWN_DIRECTORIES = frozenset(
+    {
+        ".git",
+        ".venv",
+        "__pycache__",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".mypy_cache",
+        ".tox",
+        ".nox",
+        ".cache",
+        "build",
+        "dist",
+        "htmlcov",
+        "node_modules",
+    }
+)
 TOP_LEVEL_FIELD = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?:[ \t]*(.*))?$")
 METADATA_FIELD = re.compile(r"^  ([A-Za-z_][A-Za-z0-9_-]*):[ \t]*(.*)$")
 YAML_INTEGER = re.compile(r"^[+-]?[0-9]+$")
@@ -238,6 +255,17 @@ def skill_files() -> list[Path]:
     return sorted(SKILLS_ROOT.glob("*/SKILL.md"))
 
 
+def repository_markdown_files(repository_root: Path = ROOT) -> list[Path]:
+    return sorted(
+        path
+        for path in repository_root.rglob("*.md")
+        if not any(
+            part in EXCLUDED_MARKDOWN_DIRECTORIES
+            for part in path.relative_to(repository_root).parts[:-1]
+        )
+    )
+
+
 def parse_frontmatter(path: Path) -> dict[str, object]:
     """Parse the small, portable frontmatter subset used by these skills.
 
@@ -358,13 +386,17 @@ def markdown_targets(markdown: str) -> Iterator[str]:
         yield definitions.get(normalized_label, label)
 
 
-def local_link_target(source: Path, target: str) -> Path | None:
-    parsed = urlsplit(target.strip())
-    if parsed.scheme or parsed.netloc or target.startswith(("#", "//", "/")):
+def local_link_target(source: Path, target: str, repository_root: Path = ROOT) -> Path | None:
+    stripped = target.strip()
+    parsed = urlsplit(stripped)
+    if parsed.scheme or parsed.netloc or stripped.startswith(("#", "//")):
         return None
     if not parsed.path:
         return None
-    return (source.parent / unquote(parsed.path)).resolve()
+    decoded_path = unquote(parsed.path)
+    if decoded_path.startswith("/"):
+        return (repository_root / decoded_path.lstrip("/")).resolve()
+    return (source.parent / decoded_path).resolve()
 
 
 def declared_asset_paths(skill: Path) -> set[str]:
@@ -655,17 +687,76 @@ def test_skill_stays_within_concise_size_budget(skill):
     assert estimated_tokens < 5_000
 
 
+def test_repository_markdown_files_include_repository_contracts_and_skill_documents():
+    files = {path.relative_to(ROOT).as_posix() for path in repository_markdown_files()}
+
+    assert {
+        "README.md",
+        "AGENTS.md",
+        "CONTRIBUTING.md",
+        "SECURITY.md",
+        "CHANGELOG.md",
+    } <= files
+    assert any(path.startswith("docs/") for path in files)
+    assert ".agents/skills/python-blackbox-testing/SKILL.md" in files
+    assert ".agents/skills/python-parameterized-testing/SKILL.md" in files
+
+
+def test_repository_markdown_files_exclude_generated_and_cache_directories(tmp_path):
+    retained = tmp_path / "docs" / "retained.md"
+    retained.parent.mkdir()
+    retained.write_text("retained\n", encoding="utf-8")
+    for directory in (".git", ".venv", "__pycache__", "build", "node_modules"):
+        path = tmp_path / directory / "generated.md"
+        path.parent.mkdir()
+        path.write_text("generated\n", encoding="utf-8")
+
+    assert repository_markdown_files(tmp_path) == [retained]
+
+
 def test_all_relative_markdown_links_resolve():
     missing_targets: list[str] = []
-    markdown_files = sorted(SKILLS_ROOT.rglob("*.md"))
+    markdown_files = repository_markdown_files()
 
     for source in markdown_files:
         for target in markdown_targets(source.read_text(encoding="utf-8")):
             resolved = local_link_target(source, target)
             if resolved is not None and not resolved.exists():
-                missing_targets.append(f"{source.relative_to(ROOT)} -> {target}")
+                # Some repository documents use a bare repository-root path.
+                # Accept that form only when its root-relative target exists.
+                root_relative = local_link_target(source, f"/{target.lstrip('/')}")
+                if root_relative is None or not root_relative.exists():
+                    missing_targets.append(f"{source.relative_to(ROOT)} -> {target}")
 
     assert not missing_targets, "missing local Markdown targets:\n" + "\n".join(missing_targets)
+
+
+def test_root_relative_local_links_and_missing_docs_links_are_checked(tmp_path):
+    (tmp_path / "docs").mkdir()
+    source = tmp_path / "README.md"
+    source.write_text(
+        "[present](/docs/present.md)\n[missing](/docs/missing.md)\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "docs" / "present.md").write_text("present\n", encoding="utf-8")
+
+    targets = list(markdown_targets(source.read_text(encoding="utf-8")))
+    resolved = [local_link_target(source, target, tmp_path) for target in targets]
+    missing = [
+        f"{target}"
+        for target, path in zip(targets, resolved, strict=True)
+        if path is not None and not path.exists()
+    ]
+
+    assert resolved[0] == tmp_path / "docs" / "present.md"
+    assert missing == ["/docs/missing.md"]
+
+
+def test_root_relative_local_link_uses_repository_root():
+    assert (
+        local_link_target(ROOT / "docs" / "research" / "report.md", "/README.md")
+        == ROOT / "README.md"
+    )
 
 
 def test_markdown_targets_keep_inline_and_angle_bracket_targets():
