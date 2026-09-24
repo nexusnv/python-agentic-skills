@@ -74,6 +74,21 @@ jobs:
       - name: skills.sh.json syntax
         run: uv run --locked --group dev python -m json.tool skills.sh.json >/dev/null
 
+      # Design spec section 7: CI must fail on uncommitted generated changes, i.e. a
+      # step that rewrites a tracked file during the run fails the build. The
+      # range-anchored `git diff --check` above only inspects committed content, so
+      # it cannot catch this. Keep this the last step so it runs after anything
+      # that could mutate tracked files.
+      - name: Fail on uncommitted generated changes
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "::error::This workflow run modified tracked files; the tree is not clean. Commit or restore the changes, or stop the step from rewriting tracked files."
+            exit 1
+          fi
+          echo "Worktree is clean; no tracked files were modified during the run."
+
   skills-smoke:
     # Separate job so a skills.sh or npm outage does not mask Python test results.
     name: skills.sh discovery smoke
