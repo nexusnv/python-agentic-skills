@@ -21,70 +21,148 @@ REQUIRED_HEADINGS = {
 }
 REQUIRED_FIXTURE_KEYS = {"id", "prompt", "kind", "expected"}
 REQUIRED_FIXTURE_KINDS = {"positive", "near-miss", "safety", "evidence"}
-REPORT_TEMPLATE_FIELDS = {
-    "python-blackbox-testing": (
-        ("scenario_id", ("scenario_id",)),
-        ("execution_id", ("execution_id",)),
+BLACKBOX_TEMPLATE_MARKERS = (
+    ("public boundary", ("- Boundary:",)),
+    ("consumer", ("- Consumer:",)),
+    (
+        "runner and environment",
+        ("## Runner and environment", "- Test runner and version:", "- Environment fingerprint"),
+    ),
+    ("expected result", ("| Expected result |",)),
+    ("expected failure or not-applicable", ("| Expected failure / not-applicable reason |",)),
+    ("named oracle", ("| Named oracle |",)),
+    ("normalization", ("| Normalization |",)),
+    ("properties and invariants", ("| Properties/invariants |",)),
+    ("coverage areas", ("| Coverage areas/plan |",)),
+    (
+        "safety and approval fields",
         (
+            "- Safety constraints:",
+            "- run_approval_status:",
+            "- run_approval_scope:",
+            "- credential_approval_status:",
+            "- credential_approval_scope:",
+        ),
+    ),
+    ("execution and scenario IDs", ("| execution_id |", "| scenario_id |")),
+    (
+        "actual result states",
+        ("| result_state |", "pass / fail / skip / expected-failure"),
+    ),
+    ("not-run", ("## Not run", "result_state: not-run")),
+    ("minimized reproducers", ("## Failures and minimized reproducers",)),
+    ("retained regressions", ("## Retained regressions",)),
+    ("limitations", ("## Coverage gaps and limitations",)),
+)
+PARAMETERIZED_TEMPLATE_MARKERS = (
+    ("target or boundary", ("- Target behavior or public boundary:",)),
+    ("consumer", ("- Consumer and contract:",)),
+    (
+        "runner and environment",
+        (
+            "## Runner and environment",
+            "- Project-native runner and version:",
+            "- Environment fingerprint",
+        ),
+    ),
+    (
+        "valid invalid and unsupported domains",
+        ("- Valid domain:", "- Invalid domain:", "- Unsupported domain:"),
+    ),
+    ("properties", ("- Property statements and quantified invariants:",)),
+    ("coverage", ("- Coverage plan and input families:",)),
+    (
+        "fixed generated discarded and truncated counts",
+        (
+            "- Fixed-example count:",
+            "- Generated-witness count:",
+            "- Discarded-case count and reasons:",
+            "- Truncated count:",
+        ),
+    ),
+    ("seed", ("- Seed and generator",)),
+    ("replay", ("| replay note |",)),
+    (
+        "exact command and exit",
+        ("| exact command (redacted, structure preserved) |", "| exit status |"),
+    ),
+    (
+        "result states",
+        ("| result state |", "pass / fail / skip / expected-failure"),
+    ),
+    ("not-run", ("## Not run and skips", "not-run / skip / expected-failure")),
+    ("shrinking status", ("- Minimization method, discarded attempts, and shrinking status:",)),
+    ("finite samples are not proof", ("- Finite samples are not exhaustive proof: yes",)),
+    (
+        "minimized reproducers and regressions",
+        (
+            "## Failures and minimized reproducers",
+            "- Retained fixed regression:",
+            "- Broader property or matrix retained:",
+        ),
+    ),
+    (
+        "safety",
+        (
+            "## Safety and privacy",
+            "- Synthetic data used:",
+            "- Approval never authorized secret or data access:",
+        ),
+    ),
+    (
+        "limitations",
+        (
+            "## Limitations and conclusion",
+            "- What finite samples do not establish:",
+            "- Coverage gaps and discarded/truncated families:",
+        ),
+    ),
+)
+FIXTURE_REQUIRED_REPORT_FIELDS = {
+    "python-blackbox-testing": frozenset(
+        {
+            "scenario_id",
+            "execution_id",
             "working_directory_project_relative_or_redacted",
-            ("working directory (project-relative or redacted)",),
-        ),
-        (
             "command_redacted_structure_preserved",
-            ("command (redacted; structure preserved)",),
-        ),
-        ("exit_status", ("| exit status |",)),
-        ("environment_mode", ("environment mode",)),
-        ("isolation_scope_verification", ("isolation/scope verification",)),
-        ("run_approval_status", ("run_approval_status",)),
-        ("run_approval_scope", ("run_approval_scope",)),
-        ("credential_approval_status", ("credential_approval_status",)),
-        ("credential_approval_scope", ("credential_approval_scope",)),
-        ("properties_invariants", ("properties/invariants",)),
-        ("coverage_areas_plan", ("coverage areas/plan",)),
-        ("runner", ("| runner |",)),
-        ("environment_fingerprint", ("| environment fingerprint |",)),
-        (
+            "exit_status",
+            "environment_mode",
+            "isolation_scope_verification",
+            "run_approval_status",
+            "run_approval_scope",
+            "credential_approval_status",
+            "credential_approval_scope",
+            "properties_invariants",
+            "coverage_areas_plan",
+            "runner",
+            "environment_fingerprint",
             "not_run_status",
-            ("## not run", "| scenario_id | execution_id | result_state |"),
-        ),
-        ("coverage_gaps", ("## coverage gaps and limitations",)),
+            "coverage_gaps",
+        }
     ),
-    "python-parameterized-testing": (
-        ("properties_invariants", ("property statements and quantified invariants",)),
-        ("coverage_areas_plan", ("coverage plan and input families",)),
-        (
+    "python-parameterized-testing": frozenset(
+        {
+            "properties_invariants",
+            "coverage_areas_plan",
             "valid_invalid_unsupported_domains",
-            ("valid domain:", "invalid domain:", "unsupported domain:"),
-        ),
-        ("oracle_and_normalization", ("named oracle", "normalization rules:")),
-        ("fixed_example_count", ("fixed-example count:",)),
-        ("generated_witness_count", ("generated-witness count:",)),
-        ("discarded_count", ("discarded-case count",)),
-        ("truncated_count", ("truncated count:",)),
-        ("seed", ("seed and generator",)),
-        ("runner", ("| runner |",)),
-        ("environment", ("environment fingerprint",)),
-        ("exact_commands", ("| exact command (redacted, structure preserved) |",)),
-        ("process_exit_statuses", ("| exit status |",)),
-        (
+            "oracle_and_normalization",
+            "fixed_example_count",
+            "generated_witness_count",
+            "discarded_count",
+            "truncated_count",
+            "seed",
+            "runner",
+            "environment",
+            "exact_commands",
+            "process_exit_statuses",
             "pass_fail_skip_expected_failure_and_not_run_results",
-            (
-                "| case_id | execution_id | result state |",
-                "pass / fail / skip / expected-failure",
-                "not-run / skip / expected-failure",
-            ),
-        ),
-        ("replay_command", ("| replay note |",)),
-        ("shrinking_status", ("shrinking status",)),
-        ("coverage_gaps", ("coverage gaps and discarded/truncated families",)),
-        ("limitations", ("## limitations and conclusion",)),
-        ("finite_samples_are_not_proof", ("finite samples are not exhaustive proof",)),
+            "replay_command",
+            "shrinking_status",
+            "coverage_gaps",
+            "limitations",
+            "finite_samples_are_not_proof",
+        }
     ),
-}
-REQUIRED_REPORT_FIELDS = {
-    skill_name: frozenset(field for field, _markers in fields)
-    for skill_name, fields in REPORT_TEMPLATE_FIELDS.items()
 }
 BLACKBOX_FIXTURE_CONTRACT_LANGUAGE = {
     "not-run reporting": r"not run",
@@ -365,12 +443,13 @@ def assert_report_template_contains(skill_name: str, template_path: Path | None 
     template_blocks = list(MARKDOWN_TEMPLATE_BLOCK.finditer(document))
     assert len(template_blocks) == 1, f"{template_path} must contain one fenced Markdown template"
     template = template_blocks[0].group("template").casefold()
-
-    declared_fields = dict(REPORT_TEMPLATE_FIELDS[skill_name])
-    assert set(declared_fields) == REQUIRED_REPORT_FIELDS[skill_name]
-    for field, markers in declared_fields.items():
+    markers_by_skill = {
+        "python-blackbox-testing": BLACKBOX_TEMPLATE_MARKERS,
+        "python-parameterized-testing": PARAMETERIZED_TEMPLATE_MARKERS,
+    }
+    for concept, markers in markers_by_skill[skill_name]:
         assert markers and all(marker.casefold() in template for marker in markers), (
-            f"{template_path} lacks canonical {field} fields inside the template block"
+            f"{template_path} lacks canonical {concept} fields inside the template block"
         )
 
 
@@ -507,9 +586,7 @@ def test_parameterized_evidence_template_has_concrete_truncated_count_field():
 def test_report_validation_ignores_canonical_labels_outside_template_block(tmp_path):
     report = tmp_path / "evidence-report.md"
     outside_template = "\n".join(
-        marker.casefold()
-        for _field, markers in REPORT_TEMPLATE_FIELDS["python-blackbox-testing"]
-        for marker in markers
+        marker.casefold() for _field, markers in BLACKBOX_TEMPLATE_MARKERS for marker in markers
     )
     report.write_text(
         f"# Reference prose\n\n{outside_template}\n\n```markdown\n# Empty template\n```\n",
@@ -522,7 +599,7 @@ def test_report_validation_ignores_canonical_labels_outside_template_block(tmp_p
 
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
 def test_evidence_report_fields_are_explicit_structural_lists(skill):
-    required_fields = REQUIRED_REPORT_FIELDS[skill.parent.name]
+    required_fields = FIXTURE_REQUIRED_REPORT_FIELDS[skill.parent.name]
     declared_fixtures = [
         fixture
         for fixture in load_cases(skill)
@@ -553,7 +630,15 @@ def test_blackbox_evidence_fixture_checks_boundary_linkage_and_not_run_structura
     assert isinstance(expected["required_report_fields"], list)
 
 
+def assert_blackbox_retry_contract(expected: dict[str, Any]) -> None:
+    assert expected["execution_rows_per_command_retry"] == 2
+    assert expected["per_scenario_result_rows"] is True
+    assert expected["command_level_result_state"] is False
+    assert expected["canonical_not_run_encoding"] == "result_state: not-run"
+
+
 def assert_blackbox_retry_integrity(expected: dict[str, Any]) -> None:
+    assert_blackbox_retry_contract(expected)
     for field in ("execution_records", "result_records", "not_run_records"):
         assert isinstance(expected[field], list) and expected[field], (
             f"{field} must be a non-empty list"
@@ -685,7 +770,12 @@ def test_blackbox_retry_results_are_linked_structural_records():
         "retries-mixed-results-and-blocked",
     )
 
-    assert_blackbox_retry_integrity(fixture["expected"])
+    expected = fixture["expected"]
+    assert expected["execution_rows_per_command_retry"] == 2
+    assert expected["per_scenario_result_rows"] is True
+    assert expected["command_level_result_state"] is False
+    assert expected["canonical_not_run_encoding"] == "result_state: not-run"
+    assert_blackbox_retry_integrity(expected)
 
 
 @pytest.mark.parametrize(
@@ -717,6 +807,27 @@ def test_blackbox_retry_integrity_rejects_broken_linkage(defect):
 
     with pytest.raises(AssertionError):
         assert_blackbox_retry_integrity(expected)
+
+
+@pytest.mark.parametrize(
+    ("field", "contradictory_value"),
+    [
+        ("execution_rows_per_command_retry", 1),
+        ("per_scenario_result_rows", False),
+        ("command_level_result_state", True),
+        ("canonical_not_run_encoding", False),
+    ],
+)
+def test_blackbox_retry_contract_rejects_contradictory_values(field, contradictory_value):
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "retries-mixed-results-and-blocked",
+    )
+    expected = deepcopy(fixture["expected"])
+    expected[field] = contradictory_value
+
+    with pytest.raises(AssertionError):
+        assert_blackbox_retry_contract(expected)
 
 
 def test_parameterized_evidence_mapping_checks_domains_counts_replay_and_limits():
@@ -904,11 +1015,32 @@ def _dotted_name(node: ast.AST) -> tuple[str, ...] | None:
     return None
 
 
+def _is_dunder_name(name: str) -> bool:
+    return name.startswith("__") and name.endswith("__")
+
+
+def _is_dunder_attribute(node: ast.AST) -> bool:
+    return isinstance(node, ast.Attribute) and _is_dunder_name(node.attr)
+
+
+def _is_forbidden_subscript_root(node: ast.AST) -> bool:
+    if not isinstance(node, ast.Subscript):
+        return False
+    root = node.value
+    dotted_name = _dotted_name(root)
+    if dotted_name is not None and (
+        dotted_name in {("sys", "modules"), ("sys", "__dict__"), ("builtins",), ("__builtins__",)}
+        or any(_is_dunder_name(part) for part in dotted_name)
+    ):
+        return True
+    return isinstance(root, ast.Name) and _is_dunder_name(root.id)
+
+
 def _is_sys_modules_access(node: ast.AST) -> bool:
     if isinstance(node, ast.Attribute):
         return _dotted_name(node) == ("sys", "modules")
     if isinstance(node, ast.Subscript):
-        return _is_sys_modules_access(node.value)
+        return _dotted_name(node.value) == ("sys", "modules")
     return False
 
 
@@ -979,8 +1111,12 @@ def ast_contract_violations(source: str) -> list[str]:
     )
 
     for node in ast.walk(tree):
+        if _is_dunder_attribute(node) or (isinstance(node, ast.Name) and node.id == "__builtins__"):
+            violations.append("forbidden dunder access")
         if _is_sys_modules_access(node):
             violations.append("forbidden sys.modules access")
+        if isinstance(node, ast.Subscript) and _is_forbidden_subscript_root(node):
+            violations.append("forbidden subscript root")
         if isinstance(node, ast.Name) and node.id in FORBIDDEN_DYNAMIC_NAMES:
             violations.append(f"forbidden dynamic name: {node.id}")
         elif isinstance(node, ast.Call) and _is_forbidden_direct_call(node):
@@ -1008,10 +1144,22 @@ def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
     "source",
     [
         "sys.modules['os'].system('echo unsafe')\n",
+        "sys.__dict__['subprocess'].Popen('echo unsafe')\n",
+        "sys.__dict__['builtins'].open('secret.txt')\n",
+        "object.__getattribute__(sys, 'modules')['os'].system('echo unsafe')\n",
+        "__builtins__['__import__']('os').system('echo unsafe')\n",
         "getattr(__builtins__, 'eval')('1 + 1')\n",
         "__import__('os').system('echo unsafe')\n",
     ],
-    ids=["sys-modules", "dynamic-getattr", "dynamic-import"],
+    ids=[
+        "sys-modules",
+        "sys-dict-subprocess",
+        "sys-dict-builtins",
+        "getattribute",
+        "dunder-builtins-subscript",
+        "dynamic-getattr",
+        "dynamic-import",
+    ],
 )
 def test_ast_contract_rejects_indirect_module_and_dynamic_access(source):
     assert ast_contract_violations(source)

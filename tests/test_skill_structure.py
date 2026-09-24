@@ -35,7 +35,15 @@ MAX_SKILL_WORDS = 5_000
 MAX_SKILL_CHARACTERS = 20_000
 
 MARKDOWN_LINK = re.compile(
-    r"!?\[[^\]]*\]\(\s*(?:<([^>]+)>|([^\s)]+))",
+    r"!?\[[^\]]*\]\(\s*(?:<([^>\r\n]+)>|([^\s)]+))",
+    re.IGNORECASE,
+)
+MARKDOWN_REFERENCE_DEFINITION = re.compile(
+    r"^[ \t]{0,3}\[([^\]\r\n]+)\]:[ \t]*(?:<([^>\r\n]+)>|([^\s]+))",
+    re.IGNORECASE | re.MULTILINE,
+)
+MARKDOWN_REFERENCE_USAGE = re.compile(
+    r"!?\[[^\]\r\n]+\]\[([^\]\r\n]*)\]",
     re.IGNORECASE,
 )
 ASSET_PATH = re.compile(
@@ -43,6 +51,8 @@ ASSET_PATH = re.compile(
 )
 TOP_LEVEL_FIELD = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?:[ \t]*(.*))?$")
 METADATA_FIELD = re.compile(r"^  ([A-Za-z_][A-Za-z0-9_-]*):[ \t]*(.*)$")
+YAML_INTEGER = re.compile(r"^[+-]?[0-9]+$")
+YAML_DECIMAL = re.compile(r"^[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+)$")
 
 
 def _frontmatter_error(path: Path, detail: str) -> AssertionError:
@@ -101,7 +111,7 @@ def _validate_yaml_characters(path: Path, text: str) -> None:
         )
 
 
-def _parse_scalar(path: Path, key: str, raw_value: str) -> str:
+def _parse_scalar(path: Path, key: str, raw_value: str) -> object:
     value = raw_value.strip()
     if not value:
         raise _frontmatter_error(path, f"{key} must not be empty")
@@ -119,6 +129,16 @@ def _parse_scalar(path: Path, key: str, raw_value: str) -> str:
         raise _frontmatter_error(path, f"{key} has invalid plain scalar syntax")
     if " #" in value:
         raise _frontmatter_error(path, f"{key} uses an unsupported inline comment")
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    if value in {"null", "~"}:
+        return None
+    if YAML_INTEGER.fullmatch(value):
+        return int(value, 10)
+    if YAML_DECIMAL.fullmatch(value):
+        return float(value)
     return value
 
 
@@ -175,8 +195,8 @@ def _parse_folded_scalar(path: Path, key: str, lines: list[str], index: int) -> 
     return value, index
 
 
-def _parse_metadata(path: Path, lines: list[str], index: int) -> tuple[dict[str, str], int]:
-    metadata: dict[str, str] = {}
+def _parse_metadata(path: Path, lines: list[str], index: int) -> tuple[dict[str, object], int]:
+    metadata: dict[str, object] = {}
     while index < len(lines):
         line = lines[index]
         if not line.startswith("  "):
@@ -255,6 +275,8 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
         else:
             value = _parse_scalar(path, key, raw_value or "")
             index += 1
+        if key in {"name", "description"} and not isinstance(value, str):
+            raise _frontmatter_error(path, f"{key} must be a string")
         frontmatter[key] = value
 
     missing_fields = REQUIRED_FRONTMATTER_FIELDS - frontmatter.keys()
@@ -275,9 +297,23 @@ def parse_frontmatter(path: Path) -> dict[str, object]:
     return frontmatter
 
 
+def _reference_definitions(markdown: str) -> dict[str, str]:
+    definitions: dict[str, str] = {}
+    for match in MARKDOWN_REFERENCE_DEFINITION.finditer(markdown):
+        label = match.group(1).strip().casefold()
+        target = match.group(2) or match.group(3)
+        definitions.setdefault(label, target.strip())
+    return definitions
+
+
 def markdown_targets(markdown: str) -> Iterator[str]:
     for match in MARKDOWN_LINK.finditer(markdown):
         yield match.group(1) or match.group(2)
+
+    definitions = _reference_definitions(markdown)
+    for match in MARKDOWN_REFERENCE_USAGE.finditer(markdown):
+        label = match.group(1).strip().casefold()
+        yield definitions.get(label, match.group(1).strip())
 
 
 def local_link_target(source: Path, target: str) -> Path | None:
@@ -347,6 +383,62 @@ def test_frontmatter_parser_accepts_required_fields_without_optional_sections(tm
     }
 
 
+@pytest.mark.parametrize(
+    ("raw_value", "expected"),
+    [
+        ("true", True),
+        ("false", False),
+        ("null", None),
+        ("~", None),
+        ("1", 1),
+        ("-2", -2),
+        ("1.5", 1.5),
+        (".5", 0.5),
+    ],
+)
+def test_frontmatter_parser_parses_unquoted_optional_scalar_types(tmp_path, raw_value, expected):
+    skill = tmp_path / "SKILL.md"
+    skill.write_text(
+        "---\nname: example\ndescription: Use when testing\nlicense: MIT\n"
+        f"compatibility: {raw_value}\n---\n",
+        encoding="utf-8",
+    )
+
+    parsed_value = parse_frontmatter(skill)["compatibility"]
+
+    assert type(parsed_value) is type(expected)
+    assert parsed_value == expected
+
+
+@pytest.mark.parametrize("metadata_field", ["version: 1", "enabled: true", "empty: null"])
+def test_frontmatter_parser_rejects_non_string_metadata_values(tmp_path, metadata_field):
+    skill = tmp_path / "SKILL.md"
+    skill.write_text(
+        "---\nname: example\ndescription: Use when testing\nlicense: MIT\n"
+        f"metadata:\n  {metadata_field}\n---\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError, match="malformed frontmatter:.*string map"):
+        parse_frontmatter(skill)
+
+
+def test_frontmatter_parser_uses_json_and_yaml_quoted_scalar_rules(tmp_path):
+    skill = tmp_path / "SKILL.md"
+    skill.write_text(
+        "---\nname: example\n"
+        "description: 'Use when: it''s requested'\n"
+        'compatibility: "3.0"\n'
+        "license: MIT\n---\n",
+        encoding="utf-8",
+    )
+
+    parsed = parse_frontmatter(skill)
+
+    assert parsed["description"] == "Use when: it's requested"
+    assert parsed["compatibility"] == "3.0"
+
+
 def test_frontmatter_parser_rejects_invalid_plain_scalar_syntax(tmp_path):
     skill = tmp_path / "SKILL.md"
     skill.write_text(
@@ -355,6 +447,25 @@ def test_frontmatter_parser_rejects_invalid_plain_scalar_syntax(tmp_path):
     )
 
     with pytest.raises(AssertionError, match="malformed frontmatter:.*invalid plain scalar syntax"):
+        parse_frontmatter(skill)
+
+
+@pytest.mark.parametrize("field", ["name", "description"])
+def test_frontmatter_parser_rejects_non_text_name_and_description(tmp_path, field):
+    values = {"name": "true", "description": "false"}
+    fields = {
+        "name": "example",
+        "description": "Use when testing",
+        "license": "MIT",
+    }
+    fields[field] = values[field]
+    skill = tmp_path / "SKILL.md"
+    skill.write_text(
+        "---\n" + "".join(f"{key}: {value}\n" for key, value in fields.items()) + "---\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError, match=rf"malformed frontmatter:.*{field} must be a string"):
         parse_frontmatter(skill)
 
 
@@ -459,6 +570,46 @@ def test_all_relative_markdown_links_resolve():
                 missing_targets.append(f"{source.relative_to(ROOT)} -> {target}")
 
     assert not missing_targets, "missing local Markdown targets:\n" + "\n".join(missing_targets)
+
+
+def test_markdown_targets_keep_inline_and_angle_bracket_targets():
+    markdown = "[normal](references/normal.md) [angled](<references/angled target.md>)"
+
+    assert list(markdown_targets(markdown)) == [
+        "references/normal.md",
+        "references/angled target.md",
+    ]
+
+
+def test_reference_style_markdown_links_resolve_case_insensitively_and_report_missing_targets(
+    tmp_path,
+):
+    references = tmp_path / "references"
+    references.mkdir()
+    valid_target = references / "valid target.md"
+    valid_target.write_text("valid\n", encoding="utf-8")
+    source = tmp_path / "source.md"
+    source.write_text(
+        "[valid][VaLiD]\n"
+        "[missing][MISSING]\n"
+        "[external][external]\n"
+        "[anchor][anchor]\n"
+        "[mail][mail]\n"
+        "\n"
+        "[valid]: <references/valid target.md>\n"
+        "[external]: https://example.com/docs\n"
+        "[anchor]: #section\n"
+        "[mail]: mailto:team@example.com\n",
+        encoding="utf-8",
+    )
+
+    missing_targets = []
+    for target in markdown_targets(source.read_text(encoding="utf-8")):
+        resolved = local_link_target(source, target)
+        if resolved is not None and not resolved.exists():
+            missing_targets.append(target)
+
+    assert missing_targets == ["MISSING"]
 
 
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
