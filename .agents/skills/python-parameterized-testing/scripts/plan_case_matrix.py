@@ -269,7 +269,7 @@ def main() -> int:
         output = json.dumps(
             result,
             allow_nan=False,
-            ensure_ascii=False,
+            ensure_ascii=True,
             sort_keys=True,
             separators=(",", ":"),
         )

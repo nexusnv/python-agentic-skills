@@ -39,6 +39,21 @@ def run_helper_text(input_text):
     )
 
 
+def test_plan_case_matrix_outputs_non_ascii_ascii_safe_json():
+    value = "café-東京"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT)],
+        input=json.dumps({"dimensions": {"text": {"values": [value]}}, "max_cases": 1}),
+        text=True,
+        capture_output=True,
+        check=True,
+        env={"PYTHONIOENCODING": "ascii"},
+    )
+    payload = json.loads(result.stdout)
+
+    assert payload["cases"] == [{"text": value}]
+
+
 def test_plan_case_matrix_is_deterministic_and_respects_limit():
     payload = {
         "dimensions": {
