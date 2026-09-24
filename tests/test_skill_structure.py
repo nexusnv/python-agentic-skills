@@ -67,7 +67,6 @@ EXCLUDED_MARKDOWN_DIRECTORIES = frozenset(
         "dist",
         "htmlcov",
         "node_modules",
-        "superpowers",
     }
 )
 TOP_LEVEL_FIELD = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?:[ \t]*(.*))?$")
@@ -365,6 +364,23 @@ def _is_heading_label(markdown: str, start: int) -> bool:
     return re.match(r"^[ \t]{0,3}#{1,6}(?:[ \t]+|$)", markdown[line_start:start]) is not None
 
 
+def unresolved_markdown_references(markdown: str) -> Iterator[str]:
+    definitions = _reference_definitions(markdown)
+    for match in MARKDOWN_REFERENCE_USAGE.finditer(markdown):
+        if _is_heading_label(markdown, match.start()):
+            continue
+        if markdown[match.end() :].lstrip().startswith(":"):
+            continue
+
+        link_text = match.group(1).strip()
+        explicit_label = match.group(2)
+        label = (
+            link_text if explicit_label is None or not explicit_label.strip() else explicit_label
+        )
+        if explicit_label is not None and _normalize_reference_label(label) not in definitions:
+            yield label
+
+
 def markdown_targets(markdown: str) -> Iterator[str]:
     for match in MARKDOWN_LINK.finditer(markdown):
         yield match.group(1) or match.group(2)
@@ -382,9 +398,9 @@ def markdown_targets(markdown: str) -> Iterator[str]:
             link_text if explicit_label is None or not explicit_label.strip() else explicit_label
         )
         normalized_label = _normalize_reference_label(label)
-        if explicit_label is None and normalized_label not in definitions:
+        if normalized_label not in definitions:
             continue
-        yield definitions.get(normalized_label, label)
+        yield definitions[normalized_label]
 
 
 def local_link_target(source: Path, target: str, repository_root: Path = ROOT) -> Path | None:
@@ -701,6 +717,25 @@ def test_repository_markdown_files_include_repository_contracts_and_skill_docume
     assert any(path.startswith("docs/") for path in files)
     assert ".agents/skills/python-blackbox-testing/SKILL.md" in files
     assert ".agents/skills/python-parameterized-testing/SKILL.md" in files
+    assert "docs/superpowers/specs/2026-09-24-initial-python-testing-skills-design.md" in files
+    assert "docs/superpowers/plans/2026-09-24-initial-python-testing-skills.md" in files
+
+
+def test_broken_link_in_docs_superpowers_file_is_detected(tmp_path):
+    source = tmp_path / "docs" / "superpowers" / "specs" / "design.md"
+    source.parent.mkdir(parents=True)
+    source.write_text("[missing](../../research/missing.md)\n", encoding="utf-8")
+
+    files = repository_markdown_files(tmp_path)
+    missing_targets = [
+        f"{path.relative_to(tmp_path)} -> {target}"
+        for path in files
+        for target in markdown_targets(path.read_text(encoding="utf-8"))
+        if (resolved := local_link_target(path, target, tmp_path)) is not None
+        and not resolved.exists()
+    ]
+
+    assert missing_targets == ["docs/superpowers/specs/design.md -> ../../research/missing.md"]
 
 
 def test_repository_markdown_files_exclude_generated_and_cache_directories(tmp_path):
@@ -828,7 +863,22 @@ def test_markdown_reference_titles_ignore_decoy_paths(tmp_path, definition):
 def test_markdown_targets_report_missing_full_and_collapsed_references():
     markdown = "[missing full][absent-label]\n[missing collapsed][]\n[ordinary bracket text]\n"
 
-    assert list(markdown_targets(markdown)) == ["absent-label", "missing collapsed"]
+    assert list(markdown_targets(markdown)) == []
+    assert list(unresolved_markdown_references(markdown)) == [
+        "absent-label",
+        "missing collapsed",
+    ]
+
+
+def test_unresolved_reference_label_is_not_resolved_as_a_sibling_file(tmp_path):
+    source = tmp_path / "source.md"
+    source.write_text("[missing][README]\n[missing][]\n[shortcut]\n", encoding="utf-8")
+    for filename in ("README.md", "missing.md", "shortcut.md"):
+        (tmp_path / filename).write_text("sibling exists but is not a reference definition\n")
+
+    markdown = source.read_text(encoding="utf-8")
+    assert list(markdown_targets(markdown)) == []
+    assert list(unresolved_markdown_references(markdown)) == ["README", "missing"]
 
 
 def test_reference_style_markdown_links_resolve_case_insensitively_and_report_missing_targets(
@@ -865,7 +915,8 @@ def test_reference_style_markdown_links_resolve_case_insensitively_and_report_mi
         if resolved is not None and not resolved.exists():
             missing_targets.append(target)
 
-    assert missing_targets == ["MISSING", "references/titled-missing.md"]
+    assert missing_targets == ["references/titled-missing.md"]
+    assert list(unresolved_markdown_references(source.read_text(encoding="utf-8"))) == ["MISSING"]
 
 
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)

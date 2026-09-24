@@ -646,6 +646,7 @@ FORBIDDEN_REDACTION_CREDENTIAL_FIELDS = frozenset(
 SAFETY_DENY_FIELDS = frozenset(
     {
         "approved_test_credential_used",
+        "approval_bypass",
         "approval_can_authorize_request",
         "approval_can_waive_redaction",
         "approval_overrides_repository_prohibition",
@@ -700,7 +701,12 @@ SAFETY_DENY_FIELDS = frozenset(
     }
 )
 APPROVED_TEST_CREDENTIAL_FIELDS = frozenset(
-    {"approved_test_credential_used", "credential_injection", "credential_type"}
+    {
+        "approved_test_credential_used",
+        "credential_injection",
+        "credential_type",
+        "credential_type_scope",
+    }
 )
 SAFETY_COMMON_FIELDS = {
     "python-blackbox-testing": {
@@ -726,6 +732,31 @@ SAFETY_COMMON_FIELDS = {
         "real_production_data_access": False,
         "customer_data_access": False,
     },
+}
+SAFETY_POSITIVE_FIELDS = {
+    "python-blackbox-testing": frozenset(
+        {
+            "local_or_synthetic_target_first",
+            "synthetic_data_default",
+            "framework_native",
+            "public_boundary_required",
+            "must_not_modify_product_code",
+        }
+    ),
+    "python-parameterized-testing": frozenset(
+        {
+            "local_or_synthetic_target_first",
+            "synthetic_data_default",
+            "framework_native",
+            "property_before_generation",
+            "generated_examples_not_proof",
+            "must_not_modify_product_code",
+        }
+    ),
+}
+CANONICAL_POSITIVE_SAFETY_FIXTURES = {
+    "python-blackbox-testing": "production-endpoint-real-token",
+    "python-parameterized-testing": "live-credential-and-cost-scope-gate",
 }
 
 
@@ -810,12 +841,6 @@ def _normalized_table_header(header: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", header.casefold()).strip()
 
 
-def _table_body_row_for_column_count(row: tuple[str, ...], column_count: int) -> tuple[str, ...]:
-    if len(row) > column_count and all(not cell for cell in row[column_count:]):
-        return row[:column_count]
-    return row
-
-
 def _assert_table_requirements(
     template: str,
     section_name: str,
@@ -834,18 +859,19 @@ def _assert_table_requirements(
         assert len(set(normalized_headers)) == len(normalized_headers), (
             f"{template_path} {section_name} table has duplicate headers"
         )
-        assert len(table.separator) == len(table.header), (
+        if normalized_headers != expected_headers:
+            continue
+        assert len(table.header) == len(expected_headers), (
+            f"{template_path} {section_name} table header has the wrong column count"
+        )
+        assert len(table.separator) == len(expected_headers), (
             f"{template_path} {section_name} table separator has the wrong column count"
         )
         assert table.body, f"{template_path} {section_name} table must contain a body row"
-        body_rows = tuple(
-            _table_body_row_for_column_count(row, len(table.header)) for row in table.body
-        )
-        assert all(len(row) == len(table.header) for row in body_rows), (
+        assert all(len(row) == len(expected_headers) for row in table.body), (
             f"{template_path} {section_name} table body has the wrong column count"
         )
-        if normalized_headers == expected_headers:
-            matching_tables.append(table)
+        matching_tables.append(table)
     assert matching_tables, (
         f"{template_path} lacks canonical {section_name} table fields in exact order: "
         f"{', '.join(required_fields)}"
@@ -1110,7 +1136,14 @@ def test_evidence_report_fields_are_explicit_structural_lists(skill):
 
 @pytest.mark.parametrize(
     "defect",
-    ["wrong-column-count", "duplicate-header", "extra-column", "renamed-header", "missing-body"],
+    [
+        "wrong-column-count",
+        "duplicate-header",
+        "extra-column",
+        "extra-blank-column",
+        "renamed-header",
+        "missing-body",
+    ],
 )
 def test_report_table_parser_rejects_schema_defects(tmp_path, defect):
     source = SKILLS_ROOT / "python-blackbox-testing" / "references" / "evidence-report.md"
@@ -1133,6 +1166,9 @@ def test_report_table_parser_rejects_schema_defects(tmp_path, defect):
     elif defect == "extra-column":
         for row in exact_table_rows:
             content = content.replace(row, row[:-1] + " | extra |", 1)
+    elif defect == "extra-blank-column":
+        for row in exact_table_rows:
+            content = content.replace(row, row[:-1] + " |  |", 1)
     elif defect == "renamed-header":
         content = content.replace("execution_id | scenario_ids", "renamed_id | scenario_ids", 1)
     elif defect == "missing-body":
@@ -1664,6 +1700,45 @@ def _assert_approved_credential_deny_list(
             )
 
 
+def _scope_values(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return value
+    return []
+
+
+def _assert_credential_type_scope(
+    entries: list[tuple[tuple[str, ...], str, Any]],
+    expected: dict[str, Any],
+    context: str,
+) -> None:
+    scope_entries = [
+        (path, value) for path, field, value in entries if field == "credential_type_scope"
+    ]
+    values: list[str] = []
+    for path, value in scope_entries:
+        location = ".".join(path)
+        scope_values = _scope_values(value)
+        assert scope_values, f"{context} requires a string credential_type_scope at {location}"
+        for scope_value in scope_values:
+            normalized = scope_value.casefold()
+            assert not any(term in normalized for term in ("real", "production", "customer")), (
+                f"{context} forbids real, production, or customer credential scope at {location}"
+            )
+        values.extend(scope_values)
+
+    if not values:
+        credential_type = expected.get("credential_type")
+        assert isinstance(credential_type, str) and any(
+            term in credential_type.casefold() for term in ("synthetic", "test")
+        ), f"{context} requires an approved synthetic/test-only credential scope"
+    else:
+        assert any(
+            term in value.casefold() for value in values for term in ("synthetic", "test")
+        ), f"{context} requires an approved synthetic/test-only credential scope"
+
+
 def assert_safety_fixture_contract(fixture: dict[str, Any], skill_name: str) -> None:
     fixture_id = fixture["id"]
     contract_key = (skill_name, fixture_id)
@@ -1682,6 +1757,15 @@ def assert_safety_fixture_contract(fixture: dict[str, Any], skill_name: str) -> 
         else:
             assert type(actual) is type(wanted) and actual == wanted, (
                 f"{context} requires {field}: {wanted!r}"
+            )
+
+    for field in SAFETY_POSITIVE_FIELDS[skill_name] & expected.keys():
+        assert expected[field] is True, f"{context} requires positive safety field {field}: True"
+    if CANONICAL_POSITIVE_SAFETY_FIXTURES[skill_name] == fixture_id:
+        for field in SAFETY_POSITIVE_FIELDS[skill_name]:
+            assert field in expected, f"{context} requires positive safety field {field}: True"
+            assert expected[field] is True, (
+                f"{context} requires positive safety field {field}: True"
             )
 
     approved_credential_fields = APPROVED_TEST_CREDENTIAL_FIELDS & expected.keys()
@@ -1712,6 +1796,8 @@ def assert_safety_fixture_contract(fixture: dict[str, Any], skill_name: str) -> 
 
     approved_credential_contract = _has_explicit_approved_test_credential_contract(expected)
     nested_entries = _nested_safety_fields(expected)
+    if expected.get("risk_class") == "credential":
+        _assert_credential_type_scope(nested_entries, expected, context)
     _assert_recursive_safety_deny_list(nested_entries, context)
     _assert_approved_credential_deny_list(
         nested_entries,
@@ -1817,6 +1903,43 @@ def test_safety_common_fields_are_required_for_every_known_fixture():
                     assert_safety_fixture_contract(incomplete, skill_name)
 
 
+@pytest.mark.parametrize("skill_name", sorted(CANONICAL_POSITIVE_SAFETY_FIXTURES))
+def test_safety_contract_requires_canonical_positive_fields_per_skill(skill_name):
+    fixture = fixture_by_id(
+        SKILLS_ROOT / skill_name / "SKILL.md",
+        CANONICAL_POSITIVE_SAFETY_FIXTURES[skill_name],
+    )
+    for field in SAFETY_POSITIVE_FIELDS[skill_name]:
+        contradictory = deepcopy(fixture)
+        contradictory["expected"][field] = False
+        with pytest.raises(AssertionError, match=rf"requires .*{field}.*: (True|False)"):
+            assert_safety_fixture_contract(contradictory, skill_name)
+
+
+def test_credential_risk_requires_approved_synthetic_or_test_scope():
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "approved-least-privilege-sandbox-credential",
+    )
+    contradictory = deepcopy(fixture)
+    contradictory["expected"]["credential_type_scope"] = "real_production_customer"
+
+    with pytest.raises(AssertionError, match="forbids real, production, or customer"):
+        assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
+
+
+def test_credential_risk_rejects_missing_approved_scope():
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "approved-least-privilege-sandbox-credential",
+    )
+    contradictory = deepcopy(fixture)
+    del contradictory["expected"]["credential_type"]
+
+    with pytest.raises(AssertionError, match="approved synthetic/test-only credential scope"):
+        assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
+
+
 @pytest.mark.parametrize("field", sorted(SAFETY_DENY_FIELDS))
 def test_safety_contract_rejects_deny_list_true_values(field):
     fixture = fixture_by_id(
@@ -1827,6 +1950,18 @@ def test_safety_contract_rejects_deny_list_true_values(field):
     contradictory["expected"][field] = True
 
     with pytest.raises(AssertionError):
+        assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
+
+
+def test_safety_contract_rejects_nested_approval_bypass():
+    fixture = fixture_by_id(
+        SKILLS_ROOT / "python-blackbox-testing" / "SKILL.md",
+        "production-endpoint-real-token",
+    )
+    contradictory = deepcopy(fixture)
+    contradictory["expected"]["nested_safety_checks"] = [{"approval_bypass": True}]
+
+    with pytest.raises(AssertionError, match="unsafe safety field"):
         assert_safety_fixture_contract(contradictory, "python-blackbox-testing")
 
 
@@ -2074,6 +2209,21 @@ def _sys_modules_import_bindings(tree: ast.AST) -> tuple[dict[str, tuple[str, ..
     return bindings, direct_exposures
 
 
+def _forbidden_import_violations(tree: ast.AST) -> list[str]:
+    violations: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom) or node.level:
+            continue
+        if node.module == "sys.modules":
+            violations.extend(
+                f"forbidden direct sys.modules import: {alias.asname or alias.name}"
+                for alias in node.names
+            )
+        elif node.module == "argparse" and any(alias.name == "_os" for alias in node.names):
+            violations.append("forbidden argparse._os import")
+    return violations
+
+
 def _dotted_name(node: ast.AST) -> tuple[str, ...] | None:
     if isinstance(node, ast.Name):
         return (node.id,)
@@ -2101,6 +2251,17 @@ def _is_dunder_name(name: str) -> bool:
 
 def _is_dunder_attribute(node: ast.AST) -> bool:
     return isinstance(node, ast.Attribute) and _is_dunder_name(node.attr)
+
+
+def _is_dangerous_subscript(node: ast.AST) -> bool:
+    if not isinstance(node, ast.Subscript):
+        return False
+    key = node.slice
+    return (
+        isinstance(key, ast.Constant)
+        and isinstance(key.value, str)
+        and key.value in FORBIDDEN_UNSAFE_ATTRIBUTE_NAMES
+    )
 
 
 def _is_forbidden_subscript_root(
@@ -2186,6 +2347,8 @@ def _is_forbidden_alias_value(
             or _is_dunder_attribute(node)
             or node.attr in FORBIDDEN_UNSAFE_ATTRIBUTE_NAMES
         )
+    if isinstance(node, ast.Subscript):
+        return _is_dangerous_subscript(node)
     return False
 
 
@@ -2229,6 +2392,7 @@ def ast_contract_violations(source: str) -> list[str]:
     violations.extend(
         f"forbidden direct sys.modules import: {binding}" for binding in direct_sys_modules_imports
     )
+    violations.extend(_forbidden_import_violations(tree))
     violations.extend(
         f"non-allowlisted import: {root}"
         for root in sorted(imported_roots - ALLOWED_HELPER_IMPORTS)
@@ -2253,6 +2417,8 @@ def ast_contract_violations(source: str) -> list[str]:
             violations.append("forbidden sys.modules access")
         if isinstance(node, ast.Subscript) and _is_forbidden_subscript_root(node, module_bindings):
             violations.append("forbidden subscript root")
+        if _is_dangerous_subscript(node):
+            violations.append("forbidden dangerous subscript alias")
         if isinstance(node, ast.Name) and node.id in FORBIDDEN_DYNAMIC_NAMES:
             violations.append(f"forbidden dynamic name: {node.id}")
         elif isinstance(node, ast.Call) and _is_forbidden_direct_call(node, module_bindings):
@@ -2299,6 +2465,10 @@ def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
         "runner = eval\nrunner('1 + 1')\n",
         "import argparse\nwriter = argparse._os.system\nwriter('echo unsafe')\n",
         "import argparse\nshim = argparse._os\nwriter = shim.system\nwriter('echo unsafe')\n",
+        "from sys.modules import os as shim\nshim.system('echo unsafe')\n",
+        "from argparse import _os\nshim = _os\nwriter = shim['system']\nwriter('echo unsafe')\n",
+        "import argparse\nshim = argparse._os\nwriter = shim['system']\nwriter('echo unsafe')\n",
+        "service = object()\nwriter = service['system']\nwriter('echo unsafe')\n",
     ],
     ids=[
         "sys-modules",
@@ -2318,6 +2488,10 @@ def test_case_matrix_helper_rejects_forbidden_direct_execution_apis():
         "aliased-eval",
         "argparse-os-system-alias",
         "argparse-os-shim-alias",
+        "sys-modules-from-import",
+        "argparse-os-from-import-subscript",
+        "argparse-os-subscript-alias",
+        "dangerous-subscript-regardless-of-receiver",
     ],
 )
 def test_ast_contract_rejects_indirect_module_and_dynamic_access(source):

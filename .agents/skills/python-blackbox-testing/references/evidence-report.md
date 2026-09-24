@@ -62,7 +62,7 @@ volatile.
 
 | execution_id | scenario_ids | Environment mode | Isolation/scope verification | run_approval_status | run_approval_scope | credential_approval_status | credential_approval_scope | Working directory (project-relative or redacted) | Command (redacted; structure preserved) | Command replay note | Exit status | Runner | Environment fingerprint | Relevant bounded excerpt |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| execution-001 | scenario-id-001 | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits |  |  |  |  |  |  |  |  |
+| execution-001 | scenario-id-001 | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits |  |  |  |  |  |  |  |
 
 Only executed rows belong in `Exact executions`; it has one row per command/retry with a real
 execution ID, working directory, command representation, and exit status. The actual `result_state`
