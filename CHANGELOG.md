@@ -46,9 +46,14 @@ All notable changes to this project are documented in this file. The format foll
 - Repository validation: structural, quality-contract, and case-matrix test suites (408 tests),
   positive/near-miss/safety/evidence eval fixtures for both skills, and a GitHub Actions workflow
   that runs Ruff, pytest, the official `skills-ref` validator for each skill, `skills.sh.json`
-  syntax, a range-anchored whitespace check, and a pinned `skills@1.7.0` discovery smoke test.
+  syntax, a range-anchored whitespace check, a final worktree-cleanliness gate that fails the run
+  if the checkout is left with modified or new untracked non-ignored files, and a pinned
+  `skills@1.7.0` discovery smoke test.
 
 ### Verification (local, 2026-09-24)
+
+_This subsection is a deliberate repo-specific addition beyond Keep a Changelog, per this repo's
+evidence conventions._
 
 Commands run on this checkout with their observed results:
 
@@ -71,3 +76,4 @@ GitHub) was not exercised over the network because these commits are not pushed 
 discovery was used instead.
 
 [Unreleased]: https://github.com/nexusnv/python-agentic-skills/compare/main...HEAD
+[0.1.0]: https://github.com/nexusnv/python-agentic-skills/commit/8fe2abf54ecf689adc318dc78fdc66473b32e2d8
