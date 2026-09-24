@@ -23,6 +23,8 @@ These rules apply to agents working in this repository.
   cases. Fixtures are for repeatable evaluation and review; they are not proof of semantic success.
 - Use the project-native test runner. Do not impose a new framework on a target project when its
   existing runner is suitable.
+- Keep workflow guidance framework-agnostic; present pytest and Hypothesis as optional tactics, never
+  silently install dependencies, and continue to prefer the target project's native runner.
 - Distinguish generated evidence from correctness: every result needs an explicit oracle, known
   limitations, and an honest status for skipped, expected-failure, and not-run work.
 

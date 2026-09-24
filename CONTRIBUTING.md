@@ -113,15 +113,40 @@ semantic evaluation, and they should not contain real credentials, personal data
 
 ## Test and validator workflow
 
-Run these commands from the repository root before handing off a change:
+Run the checks that apply to the current checkout from the repository root:
 
 ```bash
 uv sync --group dev
-uv run --group dev pytest
+python -m json.tool skills.sh.json >/dev/null
 uv run --group dev ruff check .
 uv run --group dev ruff format --check .
+git diff --check
+```
+
+The current checkout has no skill directories or `tests/` files, so do not claim discovery, fixture,
+or test results until those files are added. After the skill directories are added, run the local
+skills.sh discovery smoke test:
+
+```bash
 npx skills add . --list
 ```
+
+After the planned `evals/cases.yaml` files are added, parse every fixture with the development-only
+PyYAML dependency:
+
+```bash
+uv run --group dev python -c 'from pathlib import Path; import yaml; files = sorted(Path(".agents/skills").rglob("evals/cases.yaml")); assert files, "no eval fixtures found"; [yaml.safe_load(path.read_text()) for path in files]'
+```
+
+After `tests/test_skill_structure.py` is added as planned, run the structural/link test explicitly:
+
+```bash
+uv run --group dev pytest tests/test_skill_structure.py
+```
+
+That future test is responsible for validating skill metadata, required files, and relative Markdown
+links. The `npx skills add . --list` quick-start is intentionally unpinned; CI should pin a verified
+skills CLI version after compatibility verification rather than guessing a version.
 
 The repository targets Python 3.10 and newer. The official `skills-ref` validator currently requires
 Python 3.11 or newer, so keep that version isolated to the validator step; do not raise the Python
@@ -133,8 +158,7 @@ uvx --python 3.11 --from skills-ref agentskills validate .agents/skills/python-b
 uvx --python 3.11 --from skills-ref agentskills validate .agents/skills/python-parameterized-testing
 ```
 
-Run the validator for each changed skill rather than assuming all skills were checked. The
-`npx skills add . --list` command is the local skills.sh discovery smoke test. Do not claim a
+Run the validator for each changed skill rather than assuming all skills were checked. Do not claim a
 validator or semantic evaluation passed unless the command was run and its result is recorded.
 
 The repository tests should cover structure, portable frontmatter, required safety/evidence sections,
