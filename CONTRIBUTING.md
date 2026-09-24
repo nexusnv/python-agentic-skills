@@ -16,8 +16,8 @@ Install the development dependencies from the repository root:
 uv sync --group dev
 ```
 
-The `pyproject.toml` defines only the development dependency group and local pytest/Ruff settings.
-It deliberately has no build backend or runtime project metadata.
+The `pyproject.toml` contains virtual project metadata for uv: it has a Python floor, no runtime
+dependencies, and no build backend. The project is explicitly non-distributable.
 
 ## Add or change a skill
 
@@ -47,8 +47,10 @@ support reliable activation without loading the entire skill.
 
 Keep `SKILL.md` short enough to be read at activation time. Put the decision loop and essential safety
 rules in the skill, then move detailed recipes, framework adapters, domain catalogs, and replay advice
-into focused files under `references/`. Reference those files with links and load them only when the
-workflow needs them. Reuse a reference when it is genuinely shared; do not copy it into multiple skills.
+into focused files under that skill's own `references/` directory. Each installed skill must be
+self-contained: it may load references only from inside its own directory, and it must not depend on
+files outside that directory. Cross-skill common design principles may be repeated or kept in repository
+documentation, but an installed skill must not link to or require another skill's files.
 
 ### Workflow-first writing
 
@@ -117,19 +119,23 @@ Run these commands from the repository root before handing off a change:
 uv sync --group dev
 uv run --group dev pytest
 uv run --group dev ruff check .
+uv run --group dev ruff format --check .
+npx skills add . --list
 ```
 
-When a skill directory exists, validate every changed skill with the official `skills-ref` validator
-for the installed Agent Skills tooling:
+The repository targets Python 3.10 and newer. The official `skills-ref` validator currently requires
+Python 3.11 or newer, so keep that version isolated to the validator step; do not raise the Python
+floor for the repository's runtime or development dependencies. The current `skills-ref` package
+exposes the `agentskills` executable, so use this verified equivalent for each skill:
 
 ```bash
-skills-ref validate .agents/skills/python-blackbox-testing
-skills-ref validate .agents/skills/python-parameterized-testing
+uvx --python 3.11 --from skills-ref agentskills validate .agents/skills/python-blackbox-testing
+uvx --python 3.11 --from skills-ref agentskills validate .agents/skills/python-parameterized-testing
 ```
 
-Run the command for each changed skill rather than assuming all skills were checked. Also perform a
-local skills.sh discovery/install smoke test when practical. Do not claim a validator or semantic
-evaluation passed unless the command was run and its result is recorded.
+Run the validator for each changed skill rather than assuming all skills were checked. The
+`npx skills add . --list` command is the local skills.sh discovery smoke test. Do not claim a
+validator or semantic evaluation passed unless the command was run and its result is recorded.
 
 The repository tests should cover structure, portable frontmatter, required safety/evidence sections,
 relative links, fixture shape, and deterministic bounded behavior. Run the project-native runner in

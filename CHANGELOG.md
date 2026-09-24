@@ -9,7 +9,7 @@ All notable changes to this project are documented in this file. The format foll
 
 - Documentation and repository guidance for the initial Python testing skills collection.
 
-## [0.1.0] - 2026-09-24
+## [0.1.0] - Planned (2026-09-24)
 
 ### Added
 
@@ -25,5 +25,4 @@ All notable changes to this project are documented in this file. The format foll
 - Framework-agnostic guidance that supports pytest, unittest, and plain Python while treating pytest,
   Hypothesis, Pact, and browser drivers as optional integrations.
 
-[Unreleased]: https://github.com/nexusnv/python-agentic-skills/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/nexusnv/python-agentic-skills/releases/tag/v0.1.0
+[Unreleased]: https://github.com/nexusnv/python-agentic-skills/compare/main...HEAD

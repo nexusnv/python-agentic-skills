@@ -19,8 +19,7 @@ Report suspected vulnerabilities privately through GitHub's vulnerability report
 
 <https://github.com/nexusnv/python-agentic-skills/security/advisories/new>
 
-Maintainers are volunteers, so no guaranteed response time is provided. Please include, using
-synthetic or redacted material where possible:
+No response time is guaranteed. Please include, using synthetic or redacted material where possible:
 
 - the affected skill, file, and commit/ref;
 - the vulnerability type, impact, and relevant agent or client versions;

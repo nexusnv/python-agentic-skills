@@ -3,8 +3,9 @@
 [![skills.sh](https://img.shields.io/badge/skills.sh-python%20agentic%20skills-blue)](https://skills.sh/nexusnv/python-agentic-skills)
 
 An open-source collection of Agent Skills for Python projects. This repository is a collection of
-agent instructions and workflows, **not a PyPI testing framework** or a replacement for a project's
-test runner.
+agent instructions and workflows, **not a PyPI testing framework**, distributable Python package, or
+replacement for a project's test runner. The root `pyproject.toml` is non-package virtual metadata for
+uv; it has no runtime dependencies or build backend.
 
 The collection promises framework-agnostic, evidence-driven black-box and parameterized testing.
 Skills can help an agent plan a behavior-focused test matrix, execute the repository's existing tests,
