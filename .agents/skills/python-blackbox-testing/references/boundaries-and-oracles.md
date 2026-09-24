@@ -88,13 +88,16 @@ decide whether an observable result is correct.
 
 ## Scenario matrix
 
-Create a matrix before implementation. Use one row per scenario execution, keep `scenario_id`
-stable across retries, and assign a unique `execution_id` to each command run. Include:
+Create a planning matrix before implementation. Use one planning row per scenario with a stable
+`scenario_id` and `execution_id: pending`. Keep `scenario_id` stable across retries. The
+`Exact executions` table has one row per command/retry with a unique `execution_id`; `Results` has
+one row per executed scenario linked to an execution; and `Not run` has one row per blocked/not-run scenario
+with `execution_id: N/A`. Include:
 
 | Field | Required content |
 | --- | --- |
 | `scenario_id` | Stable scenario identifier reused across retries. |
-| `execution_id` | `pending` before execution; unique identifier for one executed command; use `N/A` for blocked/not-run and record retry lineage separately. |
+| `execution_id` | `pending` before execution; actual identifiers belong in the execution table, and blocked/not-run scenarios use `N/A` only in `Not run`. |
 | Traceability | Public interface, contract, defect, or open question. |
 | Label | Contract, characterization, regression, or suspicious current behavior. |
 | Input class | Valid, invalid, boundary, stateful, negative, or another explicit behavioral family. |
@@ -112,7 +115,7 @@ stable across retries, and assign a unique `execution_id` to each command run. I
 | `run_approval_scope` | Target/method/data/volume/rate/time limits and paid-call budget, or destructive target/maximum resources/rollback/cleanup/permission. |
 | `credential_approval_status` | `not-required`, `approved`, or `blocked`; using any test credential is a separate gate. |
 | `credential_approval_scope` | Target/service, least-privilege, synthetic/test-only constraint, expiry/rotation, and volume/rate/time limits; never the credential value. |
-| Safety status | Default-safe local isolation; approved side effect; verified external sandbox; manual/not-run gate; or unconditional refusal. |
+| Safety status | Default-safe local isolation; approved side effect; verified external sandbox; blocked/not-run gate; or unconditional refusal. |
 | `planned_result_state` | Planned result state before execution; actual outcomes belong in the result table. |
 
 A broad default matrix should cover the relevant input families and state transitions without

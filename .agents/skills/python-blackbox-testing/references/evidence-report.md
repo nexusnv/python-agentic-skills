@@ -2,9 +2,10 @@
 
 Use this mandatory template before execution and complete it after the final run. Copy it into the
 target repository's established report location, or into `test-reports/<descriptive-name>.md` when no
-convention exists. A user scope change cannot remove the report artifact; explicitly authorized
-safety redaction may remove sensitive values only. Keep raw logs, secrets, real data, and unbounded
-output outside the report.
+convention exists. A user scope change cannot remove the report artifact. Redaction is mandatory:
+secrets, tokens, personal data, private paths, authorization headers, and raw unbounded sensitive output
+are never persisted, displayed, or forwarded. Record only bounded redacted evidence; never record
+secret values.
 
 ```markdown
 # Black-box evidence report
@@ -62,11 +63,13 @@ volatile.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | execution-001 | scenario-id-001 | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits |  |  |  |  |  |
 
-Only executed rows belong in `Exact executions`; every row has a real execution ID and an executed
-result state. Keep `scenario_id` stable across retries and assign a new `execution_id` to every
-executed command. Every executed result references both IDs so commands, exit statuses, and retries
-remain unambiguous. A blocked or not-run result belongs only in `Not run` and uses
-`scenario_id`, `execution_id: N/A`, a reason, and no exact command or exit status.
+Only executed rows belong in `Exact executions`; it has one row per command/retry with a real
+execution ID, exact command, and exit status. The actual `result_state` for an executed scenario
+belongs only in the linked `Results` row, not in this execution table. Keep `scenario_id` stable
+across retries and assign a new `execution_id` to every executed command. Every executed scenario
+result references both IDs so commands, exit statuses, and retries remain unambiguous. A blocked
+or not-run result belongs only in `Not run` and uses `scenario_id`, `execution_id: N/A`, a reason,
+and no exact command or exit status.
 
 ## Results
 
@@ -74,9 +77,10 @@ remain unambiguous. A blocked or not-run result belongs only in `Not run` and us
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 |  |  | named properties or N/A — example-only — reason | input families, boundaries, state transitions, exclusions | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits | pass / fail / skip / expected-failure |  |  |  |  |
 
-Results contain one row per executed scenario result with `scenario_id`, `execution_id`,
-`result_state`, `observed_public_outcome`, and `evidence_reference`. Exclude blocked/not-run rows;
-put those only in `Not run` with `execution_id: N/A`, a reason, and no command or exit status.
+Results contain one row per executed scenario result linked to one execution, with `scenario_id`,
+`execution_id`, `result_state`, `observed_public_outcome`, and `evidence_reference`. Exclude
+blocked/not-run rows; put those only in `Not run` with `execution_id: N/A`, a reason, and no command
+or exit status.
 
 ## Failures and minimized reproducers
 
@@ -99,7 +103,7 @@ put those only in `Not run` with `execution_id: N/A`, a reason, and no command o
 - Expected observable outcome:
 - Actual observable outcome:
 - Oracle source:
-- result_state:
+- Linked Results row:
 - Classification: product defect / environment issue / bad oracle / flaky / blocked
 - Smaller-case search and discarded attempts:
 - Diagnosis:
@@ -149,7 +153,9 @@ No minimized reproducer: state why minimization was not applicable or possible.
 |  | N/A | not-run |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified | not-required / approved / blocked | target/method/data/volume/rate/time limits; budget when paid; destructive scope when applicable | not-required / approved / blocked | target/service, least-privilege, synthetic/test-only, expiry/rotation, volume/rate/time limits |  |
 
 `Not run` is the only structured location for blocked/not-run rows. They use `scenario_id`,
-`execution_id: N/A`, a reason, and run/credential approval fields, but no command or exit status.
+`execution_id: N/A`, `result_state: not-run`, a reason, and run/credential approval fields, but no
+command or exit status. For manual/non-gating work, use the precise reason such as
+`approval blocked; manual/non-gating`; manual/non-gating is not a separate result state.
 
 
 ## Coverage gaps and limitations
