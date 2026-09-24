@@ -1,0 +1,11 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "Testing",
+      "description": "Framework-agnostic testing workflows for Python projects.",
+      "skills": ["python-blackbox-testing", "python-parameterized-testing"]
+    }
+  ]
+}
