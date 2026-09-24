@@ -23,7 +23,7 @@ convention exists. Keep raw logs, secrets, real data, and unbounded output outsi
 - Exact working directory:
 - Environment fingerprint (OS/runtime and non-sensitive runtime details):
 - Seed (or N/A with reason):
-- Environment mode: local-isolated / external-live / external-sandbox-verified / external-sandbox-unverified
+- Environment mode: local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified
 - Isolation/scope verification (exact method and result):
 - Approval status: not-required / approved / blocked
 - Approval scope (target/method/data/volume/time limits; budget when paid):
@@ -34,9 +34,9 @@ convention exists. Keep raw logs, secrets, real data, and unbounded output outsi
 
 ## Scenario matrix
 
-| ID | Traceability | Label | Input class | Preconditions | Public invocation | Expected result | Expected failure / not-applicable reason | Expected side effects | Cleanup | Oracle source | Environment mode | Isolation/scope verification | Approval status | Approval scope | Result status |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-|  |  |  |  |  |  |  |  |  |  |  | local-isolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | pass / fail / skip / expected-failure / not-run |
+| scenario_id | execution_id | Traceability | Label | Input class | Preconditions | Public invocation | Expected result | Expected failure / not-applicable reason | Expected side effects | Cleanup | Oracle source | Environment mode | Isolation/scope verification | Approval status | Approval scope | Result status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  |  |  |  |  |  |  |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | pass / fail / skip / expected-failure / not-run |
 
 ## Oracles and normalization
 
@@ -49,20 +49,26 @@ volatile.
 
 ## Exact executions
 
-| Run | Working directory | Exact command | Exit status | Result state | Relevant bounded excerpt |
-| --- | --- | --- | --- | --- | --- |
-| 1 |  |  |  | pass / fail / skip / expected-failure / not-run |  |
+| execution_id | scenario_ids | Environment mode | Isolation/scope verification | Approval status | Approval scope | Exact command | Exit status | Runner | Environment fingerprint | Result state | Relevant bounded excerpt |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| execution-001 | scenario-id-001 | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable |  |  |  |  | pass / fail / skip / expected-failure / not-run |  |
+
+Keep `scenario_id` stable across retries and assign a new `execution_id` to every command run. Every
+result must reference both IDs so commands, exit statuses, and retries remain unambiguous.
 
 ## Results
 
-| Scenario or group | Environment mode | Isolation/scope verification | Approval status | Approval scope | Result status | Oracle outcome | Observed outcome | Retries | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-|  | local-isolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | pass / fail / skip / expected-failure / not-run |  |  |  |  |
+| execution_id | scenario_id | Environment mode | Isolation/scope verification | Approval status | Approval scope | Result status | Oracle outcome | Observed outcome | Retry of execution_id | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+|  |  | local-isolated / local-unisolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | pass / fail / skip / expected-failure / not-run |  |  |  |  |
 
 ## Failures and minimized reproducers
 
 ### Failure ID
 
+- execution_id:
+- scenario_id:
+- Retry of execution_id:
 - Scenario and public boundary:
 - Minimal inputs and state:
 - Exact replay command:
@@ -95,7 +101,8 @@ No minimized reproducer: state why minimization was not applicable or possible.
 - Isolation/scope verification (exact method and result):
 - Approval status and scope:
 - Synthetic data used:
-- Local/isolated dependencies:
+- Local-isolated dependencies:
+- Local-unisolated state and verification:
 - External-live or cost-incurring action attempted: no / approved details
 - External sandbox attempted: no / verified or unverified details
 - Real user/production credential accessed: no

@@ -88,21 +88,28 @@ decide whether an observable result is correct.
 
 ## Scenario matrix
 
-Create a matrix before implementation. Include these fields for every scenario:
+Create a matrix before implementation. Use one row per scenario execution, keep `scenario_id`
+stable across retries, and assign a unique `execution_id` to each command run. Include:
 
 | Field | Required content |
 | --- | --- |
-| ID and traceability | Stable case ID linked to the public interface, contract, defect, or open question. |
+| `scenario_id` | Stable scenario identifier reused across retries. |
+| `execution_id` | Unique identifier for one command execution; record retry lineage separately. |
+| Traceability | Public interface, contract, defect, or open question. |
+| Label | Contract, characterization, regression, or suspicious current behavior. |
 | Input class | Valid, invalid, boundary, stateful, negative, or another explicit behavioral family. |
-| Preconditions | Synthetic state, setup, dependency mode, environment, and authorization assumptions. |
+| Preconditions | Synthetic state, setup, environment mode, isolation, and authorization assumptions. |
 | Invocation | Public boundary and concrete consumer action. |
 | Expected result | Named observable success outcome and oracle source. |
-| Expected failure | Stable error or rejection outcome, or `not applicable` with a reason. |
-| Expected side effects | Observable state/files/events that must change or must not change. |
-| Cleanup | Isolated teardown and confirmation that no shared state remains. |
-| Label | Contract, characterization, regression, or suspicious current behavior. |
-| Safety status | Local/synthetic; separately approved live synthetic call; separately approved destructive or paid action; or unconditional refusal. |
-| Result status | Pass, fail, skip, expected-failure, or not-run after execution. |
+| Expected failure / not-applicable reason | Stable rejection outcome, or `not applicable` with a reason. |
+| Expected side effects | Observable state/files/events that must change or remain unchanged. |
+| Cleanup | Teardown, affected-resource limit, and verification where side effects occur. |
+| `environment_mode` | `local-isolated`, `local-unisolated`, `external-live`, `external-sandbox-verified`, or `external-sandbox-unverified`. |
+| `isolation_scope_verification` | Exact verification method and result, including why `local-unisolated` applies when relevant. |
+| `approval_status` | `not-required`, `approved`, or `blocked`. |
+| `approval_scope` | Target/method/data/volume/time limits and paid-call budget, or destructive target/maximum resources/rollback/cleanup/permission. |
+| Safety status | Default-safe local isolation; approved side effect; verified external sandbox; manual/not-run gate; or unconditional refusal. |
+| `result_status` | Pass, fail, skip, expected-failure, or not-run linked to the execution. |
 
 A broad default matrix should cover the relevant input families and state transitions without
 creating an uncontrolled Cartesian product. A requested focus narrows the prioritized set; record

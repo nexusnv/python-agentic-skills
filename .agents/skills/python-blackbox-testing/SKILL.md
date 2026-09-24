@@ -34,17 +34,21 @@ product-code fix.
   unittest, and plain Python are valid; do not silently install or impose a framework.
 - Give every scenario a named observable oracle. A captured current result is characterization
   evidence, not proof of correctness, unless it is compared with a documented or reviewed source.
-- Classify every run as `local-isolated`, `external-live`, `external-sandbox-verified`, or
-  `external-sandbox-unverified`, and record the mode and verification. Local containers, temporary
-  databases, local servers, fakes, and isolated test environments use synthetic data, are
-  default-safe, and do not require approval.
+- Classify every run as `local-isolated`, `local-unisolated`, `external-live`,
+  `external-sandbox-verified`, or `external-sandbox-unverified`, and record the mode and
+  verification. `local-isolated` covers temporary directories, local fake services, isolated
+  databases/schemas/workspaces, and equivalent synthetic-data environments; it is default-safe and
+  does not require approval.
+- Treat shared or stale state, a shared database/workspace, or unverifiable local isolation as
+  `local-unisolated`. Side-effectful tests in that mode require explicit approval; without it, mark
+  them `not-run` or manual/non-gating.
 - Unconditionally refuse to access or expose real user/production secrets or credentials, scrape
   secret stores, or use customer or production data. Approval cannot override these refusals or
   repository prohibitions.
-- Require explicit approval for every `external-live` target and every
-  `external-sandbox-unverified` target. An `external-sandbox-verified` run may proceed without
-  approval only when its exact isolation/scope verification is recorded and no live, paid,
-  destructive, or other approval gate applies.
+- Require explicit approval for every `external-live` target, every
+  `external-sandbox-unverified` target, and every side-effectful `local-unisolated` test. An
+  `external-sandbox-verified` run may proceed without approval only when its exact isolation/scope
+  verification is recorded and the user request permits it with no other approval gate.
 - For every approval, record target/method, synthetic-data scope, volume/rate/time limits, and a
   monetary budget for paid calls. An approved least-privilege synthetic test credential is not a
   real user/production credential; use it only through an approved mechanism and never record its
@@ -89,20 +93,22 @@ product-code fix.
    normalization rules for genuinely volatile fields only. Do not weaken an oracle merely to
    accept current behavior.
 6. **Plan isolation and safety.** Classify the environment and record its verification method and
-   result. Use synthetic data in `local-isolated` containers, temporary databases, local servers,
-   fakes, and other isolated test environments by default; approval is not required. Every
-   `external-live` or `external-sandbox-unverified` run requires approval. An
-   `external-sandbox-verified` run may proceed only with recorded isolation/scope verification and
-   no other approval gate. Unconditionally refuse real secrets, customer data, and production data.
-   Approval scope must name target/method, data, volume/rate/time limits, and a paid-call budget.
-   Destructive scope instead names the target, maximum affected resources, rollback/cleanup, and
-   permission. Never record a test credential value. Honor repository prohibitions over approval.
+   result. `local-isolated` synthetic-data environments proceed without approval. Shared, stale,
+   or unverifiable local state is `local-unisolated`; side effects require approval or the check is
+   `not-run`/manual. Every `external-live` or `external-sandbox-unverified` run requires approval.
+   An `external-sandbox-verified` run may proceed only with recorded verification and no other
+   gate. Unconditionally refuse real secrets, customer data, and production data. Approval scope
+   must name target/method, data, volume/rate/time limits, and a paid-call budget. Destructive scope
+   instead names the target, maximum affected resources, rollback/cleanup, and permission. Never
+   record a test credential value. Honor repository prohibitions over approval.
 7. **Implement project-native tests.** Reuse fixtures, factories, markers, parameter tables, and
    assertion helpers. Keep tests at the public seam. Do not add a new dependency or runner unless
    the user requests it and the target repository's constraints permit it.
-8. **Execute and record evidence.** Run the exact project-native command from the intended working
-   directory. Record the command, environment differences, exit status, and each result as `pass`,
-   `fail`, `skip`, `expected-failure`, or `not-run`. Record bounded output excerpts only. Load
+8. **Execute and record evidence.** Keep each `scenario_id` stable and assign a unique
+   `execution_id` to every command run or retry. Run the exact project-native command and record
+   execution/scenario IDs, environment mode and verification, approval status/scope, runner,
+   environment fingerprint, command, exit status, and each result as `pass`, `fail`, `skip`,
+   `expected-failure`, or `not-run`. Record bounded output only. Load
    `references/evidence-report.md` before the first run and again before finishing the report.
 9. **Diagnose and minimize failures.** Reduce the reproducer while preserving the failure, replay
    exact state and inputs, and distinguish product defects, environment failures, bad oracles, and
@@ -124,11 +130,12 @@ only with other scenarios whose oracles are explicit.
 Stop before execution if the required runner or adapter is unavailable, a side effect cannot be
 isolated, or required approval is missing. Refuse real secrets, credential scraping, customer data,
 and production data even when approval is offered. `local-isolated` execution with synthetic data
-needs no approval. `external-live` and `external-sandbox-unverified` always require approval.
-`external-sandbox-verified` may proceed only with recorded verification and no other approval gate.
-Record approval scope as target/method, data, volume/rate/time limits, and budget when paid. For
-destructive work, record target, maximum affected resources, rollback/cleanup, and permission rather
-than a monetary budget. Offer a local alternative or manual non-gating check and record what did not run.
+needs no approval. Side-effectful `local-unisolated`, `external-live`, and
+`external-sandbox-unverified` work requires approval; otherwise mark it `not-run` or manual.
+`external-sandbox-verified` may proceed only with recorded verification when the user request
+otherwise permits it. Record approval scope as target/method, data, volume/rate/time limits, and
+budget when paid. For destructive work, record target, maximum affected resources,
+rollback/cleanup, and permission rather than a monetary budget.
 
 ## Failure handling
 
@@ -158,10 +165,10 @@ Produce both artifacts unless the user explicitly changes scope:
    traceability to the public contract, isolated setup/teardown, and the named oracle.
 2. **A concise evidence report** containing the boundary, consumer, runner, environment mode,
    isolation/scope verification, approval status and scope, environment fingerprint, relevant tool
-   versions, seed or a reason it is not applicable, scenario matrix, labels, oracle and
-   normalization, exact commands, working directories, exit statuses, result statuses, bounded
-   failure excerpts, minimized reproducers, retained regressions, safety constraints, retries,
-   limitations, not-run work, and coverage gaps.
+   versions, seed or a reason it is not applicable, stable scenario IDs, unique execution IDs,
+   linked execution/result records, labels, oracle and normalization, exact commands, exit statuses,
+   result statuses, bounded failure excerpts, minimized reproducers, retained regressions, safety
+   constraints, retries, limitations, not-run work, and coverage gaps.
 
 Save the report using the target repository's convention, or at `test-reports/<descriptive-name>.md`
 if no convention exists. Keep raw logs, secrets, real data, and unbounded output outside the
