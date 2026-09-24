@@ -1,16 +1,34 @@
 from __future__ import annotations
 
+import ast
 import re
 from collections.abc import Iterator
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 import pytest
-import yaml
 
 ROOT = Path(__file__).parents[1]
 SKILLS_ROOT = ROOT / ".agents" / "skills"
 EXPECTED_SKILLS = {"python-blackbox-testing", "python-parameterized-testing"}
+EXPECTED_REFERENCE_FILES = {
+    "python-blackbox-testing": frozenset(
+        {
+            "boundaries-and-oracles.md",
+            "adapters-and-safety.md",
+            "evidence-report.md",
+        }
+    ),
+    "python-parameterized-testing": frozenset(
+        {
+            "domains-and-properties.md",
+            "generation-and-replay.md",
+            "evidence-report.md",
+        }
+    ),
+}
+FRONTMATTER_FIELDS = frozenset({"name", "description", "license", "compatibility", "metadata"})
+FOLDED_SCALAR_MARKERS = frozenset({">", ">-", ">+"})
 MAX_SKILL_LINES = 500
 MAX_SKILL_WORDS = 5_000
 MAX_SKILL_CHARACTERS = 20_000
@@ -22,6 +40,70 @@ MARKDOWN_LINK = re.compile(
 ASSET_PATH = re.compile(
     r"(?<![\w.-])((?:references|scripts)/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.(?:md|py))"
 )
+TOP_LEVEL_FIELD = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(?:[ \t]*(.*))?$")
+METADATA_FIELD = re.compile(r"^  ([A-Za-z_][A-Za-z0-9_-]*):[ \t]*(.*)$")
+
+
+def _frontmatter_error(path: Path, detail: str) -> AssertionError:
+    return AssertionError(f"{path}: malformed frontmatter: {detail}")
+
+
+def _parse_scalar(path: Path, key: str, raw_value: str) -> str:
+    value = raw_value.strip()
+    if not value:
+        raise _frontmatter_error(path, f"{key} must not be empty")
+
+    if value[0] in {"'", '"'}:
+        try:
+            parsed = ast.literal_eval(value)
+        except (SyntaxError, ValueError) as error:
+            raise _frontmatter_error(path, f"{key} has an invalid quoted scalar") from error
+        if not isinstance(parsed, str):
+            raise _frontmatter_error(path, f"{key} must be a string")
+        return parsed
+
+    if value.startswith(("&", "*", "!", "[", "]", "{", "}", "|", ">", "%", "@", "`")):
+        raise _frontmatter_error(path, f"{key} uses an unsupported scalar form")
+    if "\t" in raw_value or " #" in value:
+        raise _frontmatter_error(path, f"{key} uses an unsupported inline comment or tab")
+    return value
+
+
+def _parse_folded_scalar(path: Path, key: str, lines: list[str], index: int) -> tuple[str, int]:
+    folded_lines: list[str] = []
+    while index < len(lines):
+        line = lines[index]
+        if line and not line[0].isspace():
+            break
+        folded_lines.append(line.strip())
+        index += 1
+
+    if not any(folded_lines):
+        raise _frontmatter_error(path, f"{key} folded scalar must contain a value")
+    return " ".join(part for part in folded_lines if part), index
+
+
+def _parse_metadata(path: Path, lines: list[str], index: int) -> tuple[dict[str, str], int]:
+    metadata: dict[str, str] = {}
+    while index < len(lines):
+        line = lines[index]
+        if not line.startswith("  "):
+            if not line:
+                raise _frontmatter_error(path, "metadata contains a blank line")
+            break
+        if line.startswith("   ") or line.startswith("\t"):
+            raise _frontmatter_error(path, "metadata values must be a flat string map")
+
+        match = METADATA_FIELD.fullmatch(line)
+        if match is None:
+            raise _frontmatter_error(path, "metadata must contain indented key/value entries")
+        key, raw_value = match.groups()
+        if key in metadata:
+            raise _frontmatter_error(path, f"metadata key {key!r} is duplicated")
+        metadata[key] = _parse_scalar(path, f"metadata.{key}", raw_value)
+        index += 1
+
+    return metadata, index
 
 
 def skill_files() -> list[Path]:
@@ -29,19 +111,73 @@ def skill_files() -> list[Path]:
 
 
 def parse_frontmatter(path: Path) -> dict[str, object]:
+    """Parse the small, portable frontmatter subset used by these skills.
+
+    This intentionally does not implement YAML. Skill frontmatter is limited to
+    scalar fields, folded scalar blocks, and a flat string metadata map, so a
+    malformed file gets a direct, actionable error instead of silently relying
+    on a development-only YAML dependency.
+    """
     lines = path.read_text(encoding="utf-8").splitlines()
     if not lines or lines[0] != "---":
-        raise AssertionError(f"{path} must start with a YAML frontmatter fence")
+        raise _frontmatter_error(path, "must start with a frontmatter fence")
 
     try:
         closing_fence = next(
             index for index, line in enumerate(lines[1:], start=1) if line == "---"
         )
     except StopIteration as error:
-        raise AssertionError(f"{path} has no closing YAML frontmatter fence") from error
+        raise _frontmatter_error(path, "has no closing frontmatter fence") from error
 
-    frontmatter = yaml.safe_load("\n".join(lines[1:closing_fence]))
-    assert isinstance(frontmatter, dict), f"{path} frontmatter must be a mapping"
+    frontmatter_lines = lines[1:closing_fence]
+    if not frontmatter_lines:
+        raise _frontmatter_error(path, "must contain fields")
+
+    frontmatter: dict[str, object] = {}
+    index = 0
+    while index < len(frontmatter_lines):
+        line = frontmatter_lines[index]
+        if not line or line[0].isspace():
+            raise _frontmatter_error(path, "contains an unindented or blank field line")
+
+        match = TOP_LEVEL_FIELD.fullmatch(line)
+        if match is None:
+            raise _frontmatter_error(path, "contains an invalid top-level field")
+        key, raw_value = match.groups()
+        if key not in FRONTMATTER_FIELDS:
+            raise _frontmatter_error(path, f"unsupported top-level field {key!r}")
+        if key in frontmatter:
+            raise _frontmatter_error(path, f"top-level field {key!r} is duplicated")
+
+        if key == "metadata":
+            if raw_value:
+                raise _frontmatter_error(path, "metadata must be a nested mapping")
+            metadata, index = _parse_metadata(path, frontmatter_lines, index + 1)
+            frontmatter[key] = metadata
+            continue
+
+        if raw_value in FOLDED_SCALAR_MARKERS:
+            value, index = _parse_folded_scalar(path, key, frontmatter_lines, index + 1)
+        else:
+            value = _parse_scalar(path, key, raw_value or "")
+            index += 1
+        frontmatter[key] = value
+
+    missing_fields = FRONTMATTER_FIELDS - frontmatter.keys()
+    if missing_fields:
+        missing = ", ".join(sorted(missing_fields))
+        raise _frontmatter_error(path, f"is missing required fields: {missing}")
+
+    metadata = frontmatter["metadata"]
+    if (
+        not isinstance(metadata, dict)
+        or not metadata
+        or not all(
+            isinstance(key, str) and isinstance(value, str) and value.strip()
+            for key, value in metadata.items()
+        )
+    ):
+        raise _frontmatter_error(path, "metadata must be a non-empty string map")
     return frontmatter
 
 
@@ -71,6 +207,25 @@ def test_exactly_expected_skills_are_discovered():
 
 def test_no_duplicate_root_skills_tree_exists():
     assert not (ROOT / "skills").exists()
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        (
+            "---\nname: example\ndescription: [broken\nlicense: MIT\n"
+            "compatibility: Python\nmetadata:\n  author: Example\n  version: 1\n---\n",
+            "unsupported scalar form",
+        ),
+        ("---\nname: example\n", "closing frontmatter fence"),
+    ],
+)
+def test_frontmatter_parser_rejects_malformed_frontmatter(tmp_path, body, message):
+    skill = tmp_path / "SKILL.md"
+    skill.write_text(body, encoding="utf-8")
+
+    with pytest.raises(AssertionError, match=rf"malformed frontmatter:.*{message}"):
+        parse_frontmatter(skill)
 
 
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
@@ -138,12 +293,21 @@ def test_skill_declares_only_existing_local_assets(skill):
 
 
 @pytest.mark.parametrize("skill", skill_files(), ids=lambda path: path.parent.name)
-def test_skill_has_required_package_files(skill):
+def test_skill_has_exact_approved_reference_files(skill):
     skill_dir = skill.parent
+    references_dir = skill_dir / "references"
+    actual_references = {
+        path.relative_to(references_dir).as_posix()
+        for path in references_dir.rglob("*")
+        if path.is_file()
+    }
 
-    assert skill.is_file()
-    assert any((skill_dir / "references").glob("*.md"))
-    assert (skill_dir / "evals" / "cases.yaml").is_file()
+    assert actual_references == EXPECTED_REFERENCE_FILES[skill_dir.name]
+
+
+@pytest.mark.parametrize("skill_name", sorted(EXPECTED_SKILLS))
+def test_each_skill_has_one_eval_fixture(skill_name):
+    assert (SKILLS_ROOT / skill_name / "evals" / "cases.yaml").is_file()
 
 
 def test_parameterized_skill_includes_case_matrix_planner():
