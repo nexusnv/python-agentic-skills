@@ -492,7 +492,7 @@
         attempt: retry
         scenario_id: retrying-scenario
     execution_count: 2
-    execution_rows_per_command_retry: 1
+    execution_rows_per_command_retry: 2
     result_records:
       - scenario_id: retrying-scenario
         execution_id: execution-001
@@ -515,7 +515,7 @@
         result_state: not-run
         run_approval_status: not-required
         reason: missing optional dependency
-    canonical_not_run_encoding: true
+    canonical_not_run_encoding: "result_state: not-run"
 
 - id: skip-redaction-request
   prompt: >-
