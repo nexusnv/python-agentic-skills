@@ -23,16 +23,20 @@ convention exists. Keep raw logs, secrets, real data, and unbounded output outsi
 - Exact working directory:
 - Environment fingerprint (OS/runtime and non-sensitive runtime details):
 - Seed (or N/A with reason):
-- Dependency mode: local synthetic / local sandbox / explicitly approved live synthetic
+- Environment mode: local-isolated / external-live / external-sandbox-verified / external-sandbox-unverified
+- Isolation/scope verification (exact method and result):
+- Approval status: not-required / approved / blocked
+- Approval scope (target/method/data/volume/time limits; budget when paid):
+- Destructive scope (target/maximum affected resources/rollback/cleanup/permission; budget not applicable):
 - Controlled environment, clock, locale, timezone, and identifiers:
 - Optional tools unavailable:
 - Report date:
 
 ## Scenario matrix
 
-| ID | Traceability | Label | Input class | Preconditions | Public invocation | Expected result | Expected failure / not-applicable reason | Expected side effects | Cleanup | Oracle source | Safety status | Result status |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-|  |  |  |  |  |  |  |  |  |  |  | local synthetic / blocked / separately approved | pass / fail / skip / expected-failure / not-run |
+| ID | Traceability | Label | Input class | Preconditions | Public invocation | Expected result | Expected failure / not-applicable reason | Expected side effects | Cleanup | Oracle source | Environment mode | Isolation/scope verification | Approval status | Approval scope | Result status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  |  |  |  |  |  |  | local-isolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | pass / fail / skip / expected-failure / not-run |
 
 ## Oracles and normalization
 
@@ -51,9 +55,9 @@ volatile.
 
 ## Results
 
-| Scenario or group | Status | Oracle outcome | Observed outcome | Retries | Notes |
-| --- | --- | --- | --- | --- | --- |
-|  | pass / fail / skip / expected-failure / not-run |  |  |  |  |
+| Scenario or group | Environment mode | Isolation/scope verification | Approval status | Approval scope | Result status | Oracle outcome | Observed outcome | Retries | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+|  | local-isolated / external-live / external-sandbox-verified / external-sandbox-unverified |  | not-required / approved / blocked | target/method/data/volume/time limits; budget when paid; destructive scope when applicable | pass / fail / skip / expected-failure / not-run |  |  |  |  |
 
 ## Failures and minimized reproducers
 
@@ -64,6 +68,9 @@ volatile.
 - Exact replay command:
 - Seed (or N/A with reason):
 - Environment fingerprint and relevant tool versions:
+- Environment mode:
+- Isolation/scope verification (exact method and result):
+- Approval status and scope:
 - Expected observable outcome:
 - Actual observable outcome:
 - Oracle source:
@@ -84,13 +91,23 @@ No minimized reproducer: state why minimization was not applicable or possible.
 
 ## Safety and privacy
 
+- Environment mode:
+- Isolation/scope verification (exact method and result):
+- Approval status and scope:
 - Synthetic data used:
-- Local, temporary, or sandboxed dependencies:
-- Live or sandboxed call attempted: no / approved synthetic-data details
-- Least-privilege test credential supplied through approved mechanism: no / yes, without recording it
-- Real secret or credential, customer data, or production data accessed: no
-- Destructive or cost-incurring action attempted: no / separate narrow authorization details
-- Approval scope and time, when applicable:
+- Local/isolated dependencies:
+- External-live or cost-incurring action attempted: no / approved details
+- External sandbox attempted: no / verified or unverified details
+- Real user/production credential accessed: no
+- Approved test credential used: yes / no
+- Credential type/scope:
+- Credential classification: an approved least-privilege synthetic test credential is not a real user/production credential
+- Secret value recorded: no
+- Approved test credential value handling: never recorded
+- Customer data accessed: no
+- Production data accessed: no
+- Destructive action attempted: no / target, maximum affected resources, rollback/cleanup, and permission
+- Cost-incurring action attempted: no / target/method/data/volume/time limits and budget
 - Repository prohibitions checked and approval did not override them: yes / no
 - Replacements applied to sensitive or unbounded output:
 - Cleanup verification:

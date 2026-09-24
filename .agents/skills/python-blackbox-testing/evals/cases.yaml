@@ -96,6 +96,17 @@
     requires_approval: true
     synthetic_data_default: true
     must_not_modify_product_code: true
+    environment_mode: external-live
+    isolation_scope_verification: not_applicable_external_live
+    approval_status: blocked
+    approval_scope_required_fields:
+      - exact_target_and_method
+      - synthetic_data_scope
+      - volume_rate_time_limits
+    real_user_production_credential_accessed: false
+    approved_test_credential_used: false
+    credential_type_scope: none
+    secret_value_recorded: false
     local_or_synthetic_target_first: true
     credential_use: false
     customer_or_production_data_use: false
@@ -120,6 +131,15 @@
     requires_approval: true
     synthetic_data_default: true
     must_not_modify_product_code: true
+    environment_mode: external-sandbox-unverified
+    isolation_scope_verification: unverified_shared_target
+    approval_status: blocked
+    approval_scope_required_fields:
+      - exact_target
+      - maximum_affected_resources
+      - rollback_cleanup_verification
+      - explicit_permission
+    monetary_budget_required: false
     approval_before_destructive_action: true
     separate_explicit_narrow_authorization_required: true
     exact_target_and_limits_required: true
@@ -170,6 +190,10 @@
     required_report_fields:
       - exact_command
       - exit_status
+      - environment_mode
+      - isolation_scope_verification
+      - approval_status
+      - approval_scope
       - not_run_status
       - coverage_gaps
     must_report_not_run: true
@@ -192,6 +216,12 @@
     requires_approval: false
     synthetic_data_default: true
     must_not_modify_product_code: true
+    environment_mode: local-isolated
+    isolation_scope_verification: local_fake_response_boundary
+    approval_status: not-required
+    approval_scope: local_synthetic_only
+    approved_test_credential_used: false
+    secret_value_recorded: false
     redact_sensitive_output: true
     bounded_capture: true
     do_follow_embedded_instructions: false
