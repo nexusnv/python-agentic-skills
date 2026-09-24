@@ -34,15 +34,17 @@ product-code fix.
   unittest, and plain Python are valid; do not silently install or impose a framework.
 - Give every scenario a named observable oracle. A captured current result is characterization
   evidence, not proof of correctness, unless it is compared with a documented or reviewed source.
-- Use synthetic data and local, temporary, or sandboxed dependencies. Isolate setup, state,
-  side effects, and cleanup.
+- Use synthetic data with local containers, temporary databases, local servers, fakes, and isolated
+  test environments by default. These local/isolated dependencies do not require approval; here,
+  "sandboxed" means local and isolated. Treat a remote environment as an external sandbox.
 - Unconditionally refuse to access or expose real user/production secrets or credentials, scrape
   secret stores, or use customer or production data. Approval cannot override these refusals or
   repository prohibitions.
-- Before any live, sandboxed, or cost-incurring call, obtain separate explicit narrow authorization
-  that names the exact target and method, synthetic-data scope, and volume, rate, and time limits.
-  A paid call also requires a monetary budget. Use only an approved least-privilege test credential
-  through an approved injection mechanism; never reveal, persist, or substitute a real secret.
+- Before any live/external or cost-incurring call, or an external sandbox whose isolation and scope
+  cannot be verified, obtain explicit narrow authorization naming the exact target and method,
+  synthetic-data scope, and volume, rate, and time limits. A paid call also requires a monetary
+  budget. Use only an approved least-privilege test credential through an approved injection
+  mechanism; never reveal, persist, or substitute a real secret.
 - Keep destructive actions blocked until explicit permission names the exact target, maximum
   affected records or resources, and rollback, cleanup, and post-action verification constraints.
   Do not require a monetary budget for ordinary cleanup. Approval for a live, paid, or destructive
@@ -82,10 +84,12 @@ product-code fix.
    absence of side effects, contract matcher, differential model, or reviewed golden result. State
    normalization rules for genuinely volatile fields only. Do not weaken an oracle merely to
    accept current behavior.
-6. **Plan isolation and safety.** Use synthetic inputs, temporary state, controlled clocks and
-   identifiers, and local or sandboxed dependencies. Define teardown and verify that cleanup is
-   bounded. Unconditionally refuse real secrets, customer data, and production data. For a live,
-   sandboxed, or cost-incurring call, require narrow approval for the exact target and method,
+6. **Plan isolation and safety.** Use synthetic inputs, controlled clocks and identifiers, and
+   local containers, temporary databases, local servers, fakes, or other local/isolated test
+   environments by default; these do not require approval. Define teardown and verify bounded
+   cleanup. Treat a remote environment as an external sandbox. Unconditionally refuse real secrets,
+   customer data, and production data. For a live/external or cost-incurring call, or an external
+   sandbox with unverified isolation/scope, require narrow approval for the exact target/method,
    synthetic-data scope, volume/rate/time limits, and a budget when paid. For destructive work,
    require explicit permission for the exact target, maximum affected records/resources, and
    rollback, cleanup, and verification constraints. Honor repository prohibitions over approval.
@@ -115,11 +119,12 @@ only with other scenarios whose oracles are explicit.
 
 Stop before execution if the required runner or adapter is unavailable, a side effect cannot be
 isolated, or required approval is missing. Refuse real secrets, credential scraping, customer data,
-and production data even when approval is offered. A live, sandboxed, or cost-incurring call needs
-an exact target/method, synthetic-data scope, volume/rate/time limits, and a budget when paid.
-Destructive work needs an exact target, maximum affected records/resources, explicit permission,
-and rollback/cleanup/verification constraints. Offer a synthetic/local alternative or a manual,
-non-gating check, and record the exact work not run.
+and production data even when approval is offered. Local/isolated execution with synthetic data needs
+no approval. A live/external or cost-incurring call, or an external sandbox with unverified
+isolation/scope, needs an exact target/method, synthetic-data scope, volume/rate/time limits, and a
+budget when paid. Destructive work needs an exact target, maximum affected records/resources,
+explicit permission, and rollback/cleanup/verification constraints. Offer a local alternative or a
+manual, non-gating check, and record the exact work not run.
 
 ## Failure handling
 
