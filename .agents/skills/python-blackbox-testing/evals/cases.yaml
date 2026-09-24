@@ -121,6 +121,8 @@
     environment_mode: external-live
     isolation_scope_verification: not_applicable_external_live
     run_approval_status: blocked
+    credential_approval_status: not-required
+    credential_approval_scope: no_credential_use
     properties_invariants: "N/A — example-only — billing refusal scenario"
     coverage_areas_plan:
       - production_billing_refusal
@@ -394,6 +396,7 @@
       - run_approval_gate
       - no_credential_by_default
     approved_test_credential_used: false
+    secret_value_recorded: false
     real_user_or_production_credential_accessed: false
     customer_or_production_data_use: false
 

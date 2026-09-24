@@ -41,7 +41,8 @@ MARKDOWN_LINK = re.compile(
 MARKDOWN_REFERENCE_DEFINITION = re.compile(
     r"^[ \t]{0,3}\[([^\]\r\n]+)\]:[ \t]*(?:\n[ \t]*)?"
     r"(?:<([^>\r\n]+)>|([^\s]+))"
-    r"[ \t]*(?:\"[^\"\r\n]*\"|'[^'\r\n]*')?[ \t]*$",
+    r"(?:[ \t]+(?:\((?:[^()\r\n]|\\.)*\)|"
+    r"\"(?:[^\"\\\r\n]|\\.)*\"|'(?:[^'\\\r\n]|\\.)*'))?[ \t]*$",
     re.IGNORECASE | re.MULTILINE,
 )
 MARKDOWN_REFERENCE_USAGE = re.compile(
@@ -699,6 +700,28 @@ def test_markdown_targets_support_full_collapsed_and_shortcut_references():
         "references/collapsed.md",
         "references/shortcut.md",
     ]
+
+
+@pytest.mark.parametrize(
+    "definition",
+    [
+        "[label]: references/actual.md (references/label.md)",
+        "[label]: <references/actual.md> (references/label.md)",
+        "[label]: references/actual.md 'references/label.md'",
+        '[label]: references/actual.md "references/label.md"',
+    ],
+)
+def test_markdown_reference_titles_ignore_decoy_paths(tmp_path, definition):
+    references = tmp_path / "references"
+    references.mkdir()
+    (references / "label.md").write_text("decoy\n", encoding="utf-8")
+    markdown = f"[label]\n\n{definition}\n"
+
+    targets = list(markdown_targets(markdown))
+
+    assert targets == ["references/actual.md"]
+    assert local_link_target(tmp_path / "source.md", targets[0]) == references / "actual.md"
+    assert not (references / "actual.md").exists()
 
 
 def test_markdown_targets_report_missing_full_and_collapsed_references():

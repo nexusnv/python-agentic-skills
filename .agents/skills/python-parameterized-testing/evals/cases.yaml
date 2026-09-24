@@ -365,6 +365,36 @@
       - retry_visibility
       - counterexample_minimization
       - retained_regression
+    executions:
+      - execution_id: execution-001
+        attempt: initial
+        case_id: flaky-retry-case
+      - execution_id: execution-002
+        attempt: retry
+        case_id: flaky-retry-case
+    execution_count: 2
+    results:
+      - case_id: flaky-retry-case
+        execution_id: execution-001
+        result_state: fail
+      - case_id: flaky-retry-case
+        execution_id: execution-002
+        result_state: pass
+        retry_of_execution_id: execution-001
+    retry_linkage_required: true
+    retry_linkage:
+      case_id: flaky-retry-case
+      execution_ids:
+        - execution-001
+        - execution-002
+    execution_id_linkage_required: true
+    not_run_records:
+      - case_id: unavailable-optional-tool-case
+        execution_id: "N/A"
+        result_state: not-run
+        run_approval_status: not-required
+        reason: optional tool unavailable
+    canonical_not_run_encoding: "result_state: not-run"
 
 - id: live-credential-and-cost-scope-gate
   prompt: >-
