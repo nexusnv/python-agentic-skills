@@ -1,12 +1,12 @@
 ---
 name: python-blackbox-testing
 description: >-
-  Discover, characterize, specify, and protect Python behavior through public
-  interfaces including APIs, CLIs, services, events, files, databases, and user
-  workflows. Use when asked for black-box, contract, characterization, regression,
-  public-boundary, behavior-focused, or integration testing in a Python project.
-  Do not activate solely for private helpers or internal call order when a
-  public seam exists; redirect the request to public behavior instead.
+  Use when a Python project needs to discover, characterize, specify, or protect
+  behavior through public interfaces including APIs, CLIs, services, events, files,
+  databases, and user workflows. Use for black-box, contract, characterization,
+  regression, public-boundary, behavior-focused, or integration testing. Do not
+  activate solely for private helpers or internal call order when a public seam
+  exists; redirect the request to public behavior instead.
 license: MIT
 compatibility: >-
   Python project-agnostic; uses existing project test tools and does not require

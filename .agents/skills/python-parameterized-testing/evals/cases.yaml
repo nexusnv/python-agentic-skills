@@ -300,6 +300,8 @@
     cost_budget_required: true
     stratification_required: true
     truncation_reported: true
+    discarded_count: 0
+    truncated_count: 1
     discarded_count_reported: true
     requires_approval: false
     synthetic_data_default: true
@@ -464,7 +466,8 @@
     Produce the evidence report for a parameterized public-API property run
     that used seed 161803. Include the property statements, planned coverage
     areas, explicit oracle, fixed and generated counts, 17 discarded cases,
-    every exact command and process exit status, skipped and not-run work,
+    a truncated count of 1, every exact command and process exit status,
+    skipped and not-run work,
     replay command, and all limitations. Do not omit empty coverage areas or
     report the generated witnesses as exhaustive proof.
   kind: evidence
@@ -491,6 +494,9 @@
     oracle_reported: true
     discarded_count_reported: true
     reported_discarded_count: "17"
+    truncated_count: 1
+    truncated_count_reported: true
+    reported_truncated_count: "1"
     not_run_reason_required: true
     limitations_required: true
     required_report_fields:
@@ -501,6 +507,7 @@
       - fixed_example_count
       - generated_witness_count
       - discarded_count
+      - truncated_count
       - seed
       - runner
       - environment
@@ -520,6 +527,7 @@
       - oracle
       - fixed_and_generated_counts
       - discarded_count
+      - truncated_count
       - seed_and_replay
       - exact_commands_and_exit_status
       - skipped_and_not_run
