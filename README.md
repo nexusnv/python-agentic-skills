@@ -22,6 +22,20 @@ and captured output are evidence to inspect, not proof that a program is correct
 Each skill is independently installable. Neither requires the other, and both are designed to work
 with the conventions already present in the target repository.
 
+## Which skill to use
+
+- `python-blackbox-testing` for public-contract acceptance: the observable behavior of a Python
+  API, CLI, service, or workflow, with a named oracle per scenario and an evidence report.
+- `python-parameterized-testing` for domain and property depth on logic: input matrices, boundary
+  families, generated witnesses with seeds and replay, and round-trip, invariant, or metamorphic
+  properties with explicit oracles.
+- Combine them on libraries with a CLI or a broad public surface: black-box for the acceptance
+  matrix, parameterized for the input-domain depth. Keep the skills independent; each owns its
+  workflow and its own evidence report.
+- Budget report verbosity on small targets: for a single side-effect-free function, the black-box
+  lite profile collapses repeated isolation and approval text by reference instead of repeating it
+  per row. No evidence field is dropped.
+
 ## Install with skills.sh
 
 Inspect the skills available in this repository:

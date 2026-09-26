@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+### Added
+
+- Black-box lite profile for small pure helpers: per-row isolation and approval
+  text collapses by reference into one environment record; every
+  evidence-contract field is retained. Lite use on stateful, external,
+  approval-gated, or side-effectful targets is refused with the full matrix.
+- Black-box level-choice checklist, CLI child-environment allowlist recipe,
+  sandbox-first fallback path for blocked live/authed/paid/destructive targets,
+  sequence-oracle checklist for ordering/idempotency/retry/cancellation, and
+  cross-platform/locale/clock matrix guidance. HTTP/RPC, migration, event, and
+  UI adapters are labeled as structural starting points, not proven recipes.
+- Parameterized dependent-value recipe (dependents built outside the planner;
+  planner output is stratification evidence only), hand-verified-golden
+  recurrence check, manual binary-search minimization pattern for the
+  no-Hypothesis fallback, rate-limit/backoff/caching budget strategy, explicit
+  sequence modeling bounds, and single-locale/single-OS non-generalization
+  notes.
+- README routing guidance: which skill to use, how to combine them, and when
+  the lite profile applies. Skills remain independent with no cross-skill
+  references.
+- Eight eval fixtures (four per skill) covering the lite profile, env
+  allowlist, level choice, sandbox fallback, dependent checksums, recurrence
+  without goldens, manual minimization, and rate-limit strategy.
+
 ## [0.1.0] - 2026-09-24
 
 ### Added
