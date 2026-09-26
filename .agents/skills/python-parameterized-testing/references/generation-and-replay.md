@@ -52,6 +52,11 @@ cases.
 - Replay the original failure before attempting a smaller case.
 - Reduce the input while checking that the same meaningful failure and oracle remain observable.
   Remove unnecessary fields, values, collection elements, operations, and state transitions.
+- Without Hypothesis there is no automatic shrinking. Minimize manually with a binary-search
+  pattern: halve the input (shorter string, fewer elements, smaller magnitude), replay, and keep
+  the smaller input only while the same failure and oracle persist; when halving stops
+  reproducing, narrow by single elements or single boundary steps instead. Record each kept and
+  discarded reduction attempt.
 - Record the minimized input, the minimization method, discarded attempts, and whether the result
   is a product defect, bad oracle, environment issue, or flake.
 - Retain both the original failure record and the minimized reproducer. Promote the minimized input
@@ -75,7 +80,16 @@ live credentials, customer data, and production data.** Approval may permit only
 non-sensitive live call, destructive operation, or cost-incurring action; approval never authorizes
 secret or data access. Prefer synthetic local alternatives.
 
+For rate-limited or paid targets, add a throttling plan to the budget: maximum request rate with
+backoff, caching or recording of responses where the contract allows it, and a stop rule when the
+budget is exhausted. Report throttled, cached, and unattempted families with their coverage impact;
+never silently convert an unattempted paid call into a pass.
+
 Use stateful or operation-sequence testing only when sequence history is the actual risk, such as
-ordering, retries, cancellation, or state transitions. Then model the sequence explicitly, reset
-state, record the transition oracle, and keep the finite trace replayable. Do not add stateful
-complexity to a pure function without a concrete sequence failure mode.
+ordering, retries, cancellation, or state transitions. Then model the sequence explicitly as an
+ordered operation list with a fixed starting state, assert the transition oracle after each step,
+reset state before replay, and keep the finite trace replayable. Do not add stateful
+complexity to a pure function without a concrete sequence failure mode. Deeply nested or
+relational schemas (object graphs, cross-field constraints) and streaming or very large
+collections follow the same rule: model only the sequence or relation the contract claims, bound
+depth and size explicitly, and record unmodeled relations as gaps.

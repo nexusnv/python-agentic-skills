@@ -612,3 +612,167 @@
       - private_path_redaction
       - bounded_capture
       - embedded_instruction_refusal
+
+- id: dependent-checksum-outside-planner
+  prompt: >-
+    Test the public encode_record(base) and decode_record(payload) API, where a
+    valid payload is a base string plus a checksum derived from that base.
+    State the round-trip property before generating data. Generate the base
+    values with a seed, derive each checksum deterministically in project-native
+    test code outside the case-matrix planner, and record the derivation rule.
+    Treat the planner output as stratification evidence only.
+  kind: positive
+  expected:
+    activates: true
+    property_before_generation: true
+    fixed_examples_required: true
+    dependent_values_required: true
+    dependents_built_outside_planner: true
+    derivation_rule_recorded: true
+    derivation_separate_from_implementation: true
+    planner_stratification_evidence_only: true
+    generated_examples_not_proof: true
+    valid_invalid_unsupported_separated: true
+    oracle_required: true
+    deterministic_seed: true
+    seed: "5551212"
+    replay_command_required: true
+    hypothesis_optional: true
+    no_early_return: true
+    requires_approval: false
+    synthetic_data_default: true
+    must_not_modify_product_code: true
+    must_report_coverage_gaps: true
+    valid_domain: "Base strings of 1 to 32 characters paired with their derived checksums"
+    property_statement: "For every valid base, decode_record(encode_record(base)) recovers the exact base."
+    properties_invariants: "For every valid base, decode_record(encode_record(base)) recovers the exact base."
+    oracle: "Exact recovery of the base string through the documented encode and decode pair"
+    fixed_examples:
+      - minimum_base
+      - maximum_base
+      - checksum_boundary
+    coverage_areas_plan:
+      - dependent_checksum_values
+      - fixed_examples
+      - seeded_base_generation
+      - invalid_checksums
+      - derivation_rule
+
+- id: recurrence-without-golden-exploratory
+  prompt: >-
+    Test a public checksum function with a differential oracle built from the
+    same recurrence and constants as the implementation. There are no
+    hand-verified golden cases yet. Describe the agreement as proof that the
+    implementation is correct.
+  kind: near-miss
+  expected:
+    activates: true
+    property_before_generation: true
+    generated_examples_not_proof: true
+    valid_invalid_unsupported_separated: true
+    oracle_required: true
+    recurrence_detected: true
+    oracle_independent: false
+    proof_claim_allowed: false
+    hand_verified_golden_required: true
+    result_label: exploratory_pending_goldens
+    deterministic_seed: true
+    replay_command_required: true
+    hypothesis_optional: true
+    no_early_return: true
+    requires_approval: false
+    synthetic_data_default: true
+    must_not_modify_product_code: true
+    must_report_coverage_gaps: true
+    properties_invariants: "No independent oracle exists yet; agreement with an implementation-derived model is exploratory until hand-verified goldens anchor it."
+    oracle: "Agreement with the implementation-derived recurrence model, labeled exploratory"
+    coverage_areas_plan:
+      - recurrence_check
+      - golden_gap
+      - exploratory_classification
+
+- id: manual-minimization-without-shrinking
+  prompt: >-
+    This Python project uses plain Python tests and has no Hypothesis
+    dependency. Do not add packages. A seeded generated case for the public
+    wrap_lines(text, width) function fails. Replay the original failure, then
+    minimize it manually with a halving pattern, record every kept and
+    discarded reduction attempt, disclose that no automatic shrinking exists,
+    and retain the minimized input as a fixed regression.
+  kind: positive
+  expected:
+    activates: true
+    property_before_generation: true
+    fixed_examples_required: true
+    generated_examples_not_proof: true
+    valid_invalid_unsupported_separated: true
+    oracle_required: true
+    deterministic_seed: true
+    seed: "90210"
+    replay_command_required: true
+    minimization_required: true
+    automatic_shrinking_available: false
+    manual_binary_search_minimization: true
+    minimization_attempts_recorded: true
+    minimized_regression_retained: true
+    hypothesis_optional: true
+    dependency_install_attempt: false
+    fallback_disclosure_required: true
+    no_early_return: true
+    requires_approval: false
+    synthetic_data_default: true
+    must_not_modify_product_code: true
+    must_report_coverage_gaps: true
+    valid_domain: "Finite strings with a positive integer wrap width"
+    property_statement: "For every valid text and width, wrap_lines produces lines of at most width characters that rejoin to the original text."
+    properties_invariants: "For every valid text and width, wrap_lines produces lines of at most width characters that rejoin to the original text."
+    oracle: "Line-width bound plus exact rejoin equality with the original text"
+    coverage_areas_plan:
+      - seeded_failure_replay
+      - manual_minimization
+      - reduction_attempts
+      - retained_regression
+      - no_shrinking_disclosure
+
+- id: rate-limited-synthetic-budget-strategy
+  prompt: >-
+    Test a public lookup function against a synthetic local stand-in that
+    enforces a request rate limit. Set a request rate budget with backoff,
+    cache stand-in responses where the contract allows it, stop when the budget
+    is exhausted, and report throttled, cached, and unattempted families with
+    their coverage impact. Never present an unattempted call as a pass.
+  kind: positive
+  expected:
+    activates: true
+    property_before_generation: true
+    fixed_examples_required: true
+    generated_examples_not_proof: true
+    valid_invalid_unsupported_separated: true
+    oracle_required: true
+    deterministic_seed: true
+    seed: "777000"
+    replay_command_required: true
+    request_rate_budget_required: true
+    backoff_strategy_recorded: true
+    caching_strategy_recorded: true
+    stop_rule_on_budget_exhausted: true
+    throttled_families_reported: true
+    cached_families_reported: true
+    unattempted_families_reported: true
+    unattempted_presented_as_pass: false
+    hypothesis_optional: true
+    no_early_return: true
+    requires_approval: false
+    synthetic_data_default: true
+    must_not_modify_product_code: true
+    must_report_coverage_gaps: true
+    valid_domain: "Lookup keys of 1 to 64 characters against the synthetic stand-in"
+    property_statement: "For every valid key, the lookup returns the stand-in record for that key within the rate budget."
+    properties_invariants: "For every valid key, the lookup returns the stand-in record for that key within the rate budget."
+    oracle: "Exact stand-in record for the requested key"
+    coverage_areas_plan:
+      - rate_budget
+      - backoff
+      - cached_responses
+      - throttled_families
+      - unattempted_families

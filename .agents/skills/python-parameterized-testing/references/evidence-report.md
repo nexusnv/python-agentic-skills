@@ -143,3 +143,9 @@ Never convert an absent command or an approval block into a pass.
 A report can be partial or failing when that status is explicit. Do not omit failures, retries,
 discarded cases, truncation, skips, not-run work, limitations, or the boundary between sampled
 witnesses and proof.
+
+A single-locale, single-OS run does not generalize to other platforms or Unicode versions: record
+the runtime, locale, timezone, and Unicode replay evidence above, and list untested platforms,
+locales, and adversarial Unicode families under limitations rather than implying they pass.
+Concurrency outcomes belong in the same limitations list unless a deterministic sequence
+reproducer exists.

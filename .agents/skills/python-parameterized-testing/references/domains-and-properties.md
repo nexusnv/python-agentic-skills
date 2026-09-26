@@ -62,6 +62,15 @@ Choose only properties that express meaningful behavior for the target:
 Prefer a property with an independent oracle. A property that merely repeats the implementation
 is not meaningful evidence.
 
+## Recurrence check
+
+Before claiming a differential or metamorphic result, check for recurrence: if the oracle or the
+reference model was derived from the implementation itself (same recurrence, same constants,
+same branching), the agreement is a model witness, not independent proof. Anchor the claim first
+with hand-verified golden cases reviewed against documentation or an authoritative source, then
+use the generated witnesses as exploration around those goldens. Label unanchored agreement as
+exploratory until goldens exist.
+
 ## Boundary families
 
 Cover relevant boundaries rather than assuming all values are equivalent:
@@ -78,6 +87,18 @@ Cover relevant boundaries rather than assuming all values are equivalent:
 
 Name why each selected boundary matters to the public contract. Avoid an uncontrolled Cartesian
 product; stratify or cap it and report what was not generated.
+
+## Dependent-value recipe
+
+The bundled case-matrix planner only combines independent dimension lists; it cannot express a
+value that depends on another value (for example a checksum derived from a base string). Build
+dependents outside the planner with this recipe:
+
+1. Generate or enumerate the base values (planner output may serve as the base set).
+2. Derive each dependent value deterministically in project-native test code from its base value.
+3. Keep the derivation function reviewed and separate from the implementation under test.
+4. Record the derivation rule, and treat the planner output as stratification evidence only, not
+   as the dependent matrix itself.
 
 ## Oracle quality rules
 
