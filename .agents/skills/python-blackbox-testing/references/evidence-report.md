@@ -183,3 +183,11 @@ fields, but no command or exit status. For manual/non-gating work, use the preci
 A report with a failing, partial, blocked, or incomplete run can be useful when it is explicit. Do
 not omit failures, retries, skips, expected failures, unavailable tools, not-run work, or coverage
 gaps to make the report look complete.
+
+## Lite profile reporting
+
+When the lite profile from the boundaries reference applies, the report keeps every section of
+this template but may collapse repetition: write the isolation, approval, and environment detail
+once in `Runner and environment` and reference it from the `Scenario matrix` rows instead of
+repeating the same text per row. No section and no contract field is dropped; collapsing by
+reference is the only permitted reduction.

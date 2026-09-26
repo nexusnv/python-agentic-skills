@@ -39,6 +39,22 @@ Choose the lowest level that still represents the contract and its consumer:
 Do not raise the test level merely to make coverage look broad. Raise it when the lower boundary
 would miss behavior owned by the public interface.
 
+## Level-choice checklist
+
+When more than one boundary could represent the consumer, decide with this checklist and record
+the decision and its reason in the evidence report scope:
+
+1. Name the consumer and the cheapest stable interface that consumer actually uses.
+2. Start there. Raise one level only when the contract owns behavior the lower level cannot
+   observe (argument parsing and exit status → CLI; transport and status codes → HTTP/RPC;
+   persistence and migration → filesystem/database; ordering and delivery → events; rendered
+   workflow → UI).
+3. If a higher level duplicates assertions already owned by a lower level, keep the lower level
+   and drop the duplicate.
+4. When the choice is genuinely ambiguous (for example a thin wrapper where the Python function
+   and the CLI parse the same input), prefer the level with the documented contract and record
+   the other level as a coverage gap or follow-up rather than testing both by default.
+
 ## Scenario labels
 
 - **Contract:** Assert behavior supported by documentation, a published schema, an approved
@@ -67,6 +83,8 @@ is authoritative**. Prefer these types:
 - **No-side-effect invariant:** observable state remains unchanged after an invalid or failed case.
 - **Contract matcher:** schema, protocol, type, or documented cross-field rule.
 - **Differential model:** compare the public result with a reviewed independent model or invariant.
+- **Sequence oracle:** the exact ordered series of observable events, retries, and terminal states
+  for an ordering, idempotency, retry, or cancellation contract, replayed deterministically.
 - **Reviewed golden result:** a bounded expected artifact reviewed against an authoritative source.
 
 Do not use string equality on unstable objects. Normalize only fields proven volatile, such as a
@@ -121,3 +139,23 @@ scenario with the table's N/A execution value. Include:
 A broad default matrix should cover the relevant input families and state transitions without
 creating an uncontrolled Cartesian product. A requested focus narrows the prioritized set; record
 excluded surfaces as coverage gaps rather than implying full coverage.
+
+## Lite profile for small pure helpers
+
+A full 21-column matrix and a full evidence report can outweigh the tests when the target is a
+single side-effect-free pure function with a small scenario set. In that case only, a lite
+profile is allowed:
+
+- Trigger criteria (all required): one public function, no filesystem/network/database writes,
+  no clock or randomness dependence, no approval-gated target, and a matrix of at most about a
+  dozen scenarios.
+- The planning matrix keeps `scenario_id`, label, input class, invocation, oracle, expected
+  result or failure, and traceability per row. Isolation, approval, and environment text is
+  written once in a single environment record and referenced by identifier from each row instead
+  of repeated per row.
+- The evidence report still contains every shared evidence-contract field (boundary, consumer,
+  oracle and normalization, environment and seed, exact commands and exit statuses, per-scenario
+  results including not-run rows, minimized reproducers, gaps, and the explicit not-run
+  statement). Fields are collapsed by reference, never omitted.
+- Refuse the lite profile for stateful, external, approval-gated, or side-effectful targets:
+  use the full matrix there and record the refusal reason.

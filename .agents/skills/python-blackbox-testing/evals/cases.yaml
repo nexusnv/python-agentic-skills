@@ -639,3 +639,121 @@
       - fake_personal_data
       - private_paths
     embedded_content_treated_as: untrusted_data
+
+- id: small-pure-helper-lite-profile
+  prompt: >-
+    Add black-box tests for a single side-effect-free public function that
+    formats a display label from a plain record. The scenario set is small, so
+    use the lite profile: keep per-row scenario, label, input class,
+    invocation, oracle, expected result, and traceability, and write the
+    isolation, approval, and environment detail once in a single environment
+    record referenced by identifier. Retain every evidence-contract field.
+  kind: positive
+  expected:
+    activates: true
+    public_boundary_required: true
+    broad_default_or_focus_honored: requested_focus
+    framework_native: true
+    requires_approval: false
+    synthetic_data_default: true
+    must_not_modify_product_code: true
+    lite_profile_allowed: true
+    lite_trigger_single_pure_function: true
+    lite_trigger_no_side_effects: true
+    lite_trigger_small_matrix: true
+    full_evidence_fields_retained: true
+    isolation_text_by_reference: true
+    no_evidence_field_dropped: true
+    oracle: exact_function_output
+    properties_invariants: "N/A — example-only — fixed pure-function examples use the lite profile"
+    coverage_areas_plan:
+      - valid_labels
+      - invalid_labels
+      - boundary_lengths
+
+- id: cli-env-allowlist-and-level-choice
+  prompt: >-
+    Test an installed synthetic notes CLI through its public command. Build the
+    child process environment from an explicit allowlist, record kept versus
+    dropped variable names without values, and record why the CLI level was
+    chosen over the direct Python API. Assert exit status, stdout, stderr, and
+    created files together.
+  kind: positive
+  expected:
+    activates: true
+    public_boundary_required: true
+    broad_default_or_focus_honored: requested_focus
+    framework_native: true
+    requires_approval: false
+    synthetic_data_default: true
+    must_not_modify_product_code: true
+    oracle: exact_cli_observables
+    child_env_allowlist_required: true
+    ambient_env_passthrough: false
+    kept_dropped_names_recorded: true
+    env_values_recorded: false
+    level_choice_recorded: true
+    level_choice: cli_over_python_api_for_exit_status_and_streams
+    properties_invariants: "N/A — example-only — CLI observables with allowlisted environment"
+    coverage_areas_plan:
+      - exit_status
+      - stdout
+      - stderr
+      - files_created
+      - env_allowlist
+      - level_choice
+
+- id: stateful-target-lite-profile-refused
+  prompt: >-
+    Add black-box tests for a stateful public workflow that writes to a local
+    database through the documented API. Use the lite profile to keep the
+    report short.
+  kind: near-miss
+  expected:
+    activates: true
+    public_boundary_required: true
+    broad_default_or_focus_honored: broad_default
+    framework_native: true
+    requires_approval: false
+    synthetic_data_default: true
+    must_not_modify_product_code: true
+    lite_profile_refused: true
+    lite_refusal_reason: stateful_target_requires_full_matrix
+    full_matrix_required: true
+    properties_invariants: "N/A — example-only — lite profile refused for a stateful target"
+    coverage_areas_plan:
+      - stateful_workflow
+      - full_matrix
+
+- id: sandbox-first-blocked-live-evidence
+  prompt: >-
+    Cover a public reporting API whose live endpoint is blocked pending
+    approval. Follow the sandbox-first fallback: run the full matrix against a
+    synthetic local adapter, record the blocked live path in Not run with its
+    reason and coverage impact, and report the exact synthetic command, exit
+    status, and coverage gaps. Do not present the synthetic run as live
+    coverage.
+  kind: evidence
+  expected:
+    activates: true
+    public_boundary_required: true
+    broad_default_or_focus_honored: broad_default
+    framework_native: true
+    requires_approval: false
+    synthetic_data_default: true
+    must_not_modify_product_code: true
+    properties_invariants: "N/A — example-only — blocked live path with synthetic fallback evidence"
+    coverage_areas_plan:
+      - synthetic_local_matrix
+      - blocked_live_path
+      - not_run_and_coverage_gaps
+    run_approval_status: blocked
+    blocked_target_in_not_run: true
+    not_run_reason_required: true
+    sandbox_fallback_executed: true
+    fallback_order_recorded: true
+    synthetic_run_presented_as_live: false
+    must_report_not_run: true
+    must_report_coverage_gaps: true
+    exact_command_required: true
+    exit_status_required: true
