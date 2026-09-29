@@ -70,6 +70,7 @@ jobs:
         run: |
           uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate .agents/skills/python-blackbox-testing
           uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate .agents/skills/python-parameterized-testing
+          uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate .agents/skills/python-test-suite-audit
 
       - name: skills.sh.json syntax
         run: uv run --locked --group dev python -m json.tool skills.sh.json >/dev/null
@@ -134,7 +135,7 @@ jobs:
           # line after the CLI's `│    ` box-drawing indentation. A bare substring
           # match would false-pass on a renamed skill (`-v2` suffix) or on another
           # skill's description that merely mentions this name.
-          for skill in python-blackbox-testing python-parameterized-testing; do
+          for skill in python-blackbox-testing python-parameterized-testing python-test-suite-audit; do
             if grep -Eq "^[^[:alnum:]]*${skill}[^[:alnum:]]*$" "$plain"; then
               echo "OK: $skill is listed by skills.sh discovery"
             else
