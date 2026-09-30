@@ -134,6 +134,22 @@ def _type_contains_broad_exception(node: ast.AST) -> bool:
     return False
 
 
+def _is_unittest_assert_attr(name: str) -> bool:
+    """Match unittest-style assertion attribute names without overmatching.
+
+    Accepts ``fail``, ``assertEqual``, ``assert_called_with`` and similar
+    while rejecting lookalikes such as ``assertion`` or ``failure``.
+    """
+    if name == "fail":
+        return True
+    for prefix in ("assert", "fail"):
+        if name.startswith(prefix):
+            rest = name[len(prefix) :]
+            if rest[:1] in ("", "_") or rest[:1].isupper():
+                return True
+    return False
+
+
 def _scan_function(func: ast.FunctionDef | ast.AsyncFunctionDef, path: str) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
     owned = _owned_nodes(func)
@@ -148,14 +164,12 @@ def _scan_function(func: ast.FunctionDef | ast.AsyncFunctionDef, path: str) -> l
         return text[:200]
 
     has_unittest_assert = any(
-        isinstance(call.func, ast.Attribute) and call.func.attr.startswith(("assert", "fail"))
+        isinstance(call.func, ast.Attribute) and _is_unittest_assert_attr(call.func.attr)
         for call in calls
     )
     has_raises = any(
-        isinstance(call.func, ast.Attribute)
-        and call.func.attr == "raises"
-        or isinstance(call.func, ast.Name)
-        and call.func.id == "assertRaises"
+        (isinstance(call.func, ast.Attribute) and call.func.attr in {"raises", "assertRaises"})
+        or (isinstance(call.func, ast.Name) and call.func.id in {"raises", "assertRaises"})
         for call in calls
     )
 
@@ -194,6 +208,7 @@ def _scan_function(func: ast.FunctionDef | ast.AsyncFunctionDef, path: str) -> l
             and isinstance(test.left, ast.Call)
             and isinstance(test.left.func, ast.Name)
             and test.left.func.id == "len"
+            and any(not isinstance(op, (ast.Eq, ast.Is)) for op in test.ops)
         ):
             findings.append(
                 {
@@ -205,10 +220,13 @@ def _scan_function(func: ast.FunctionDef | ast.AsyncFunctionDef, path: str) -> l
             )
 
     for call in calls:
-        is_raises = (
-            isinstance(call.func, ast.Attribute) and call.func.attr in {"raises", "assertRaises"}
-        ) or (isinstance(call.func, ast.Name) and call.func.id in {"raises", "assertRaises"})
-        if is_raises:
+        # Only pytest-style ``raises`` takes ``match=``. unittest's
+        # ``assertRaises`` takes ``msg`` (or ``assertRaisesRegex`` for patterns),
+        # so requiring ``match`` there would be a false positive.
+        is_pytest_raises = (
+            isinstance(call.func, ast.Attribute) and call.func.attr == "raises"
+        ) or (isinstance(call.func, ast.Name) and call.func.id == "raises")
+        if is_pytest_raises:
             has_match = any(kw.arg == "match" for kw in call.keywords)
             if not has_match:
                 findings.append(
@@ -261,7 +279,7 @@ def _scan_function(func: ast.FunctionDef | ast.AsyncFunctionDef, path: str) -> l
                     }
                 )
         if isinstance(node, ast.Attribute):
-            if node.attr in {"call_count", "mock_calls", "called_once"}:
+            if node.attr in {"call_count", "mock_calls", "called"}:
                 findings.append(
                     {
                         "dimension": "behavioral coupling",
@@ -279,7 +297,11 @@ def _scan_function(func: ast.FunctionDef | ast.AsyncFunctionDef, path: str) -> l
                         "pattern": "private-access",
                     }
                 )
-            if node.attr == "environ" and isinstance(node.value, ast.Name):
+            if (
+                node.attr == "environ"
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "os"
+            ):
                 findings.append(
                     {
                         "dimension": "isolation",

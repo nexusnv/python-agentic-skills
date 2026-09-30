@@ -14,9 +14,10 @@ severity above Minor.
   and message checks.
 - **Mock echo:** a mock is programmed with `return_value` or `side_effect` and the test
   asserts that same value without exercising real logic. Check whether removing the
-  system under test would still pass. The static scanner detects `unittest.mock`
-  import-based configuration; `pytest-mock`'s `mocker` fixture style is not detected
-  statically and must be confirmed by reading the test.
+  system under test would still pass. The static scanner flags a per-function
+  `return_value`/`side_effect` keyword on a mock factory call (`Mock`,
+  `MagicMock`, `patch`, `mocker.patch`, ...) in the same test.
+  Fixture-configured mocks need manual review.
 - **Exception ambiguity:** bare `except`, broad `except Exception`, or `pytest.raises`
   without `match=` where the contract names a message. Assert exact type and message
   fragment without volatile identifiers.

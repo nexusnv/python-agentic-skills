@@ -269,6 +269,58 @@ def test_scanner_ignores_narrow_tuple_except():
     assert "broad-except" not in _patterns(result)
 
 
+def test_scanner_exact_len_equality_is_not_weak():
+    result = _scan([{"path": "t.py", "content": "def test_a():\n    assert len(d) == 3\n"}])
+    assert "weak-length-assert" not in _patterns(result)
+
+
+def test_scanner_len_inequality_remains_weak():
+    for snippet in ("assert len(d) > 0\n", "assert len(d) != 0\n"):
+        result = _scan([{"path": "t.py", "content": f"def test_a():\n    {snippet}"}])
+        assert "weak-length-assert" in _patterns(result)
+
+
+def test_scanner_unittest_assert_raises_needs_no_match():
+    content = (
+        "import unittest\n"
+        "class T(unittest.TestCase):\n"
+        "    def test_x(self):\n"
+        "        with self.assertRaises(ValueError):\n"
+        "            f()\n"
+    )
+    result = _scan([{"path": "t.py", "content": content}])
+    assert "raises-without-match" not in _patterns(result)
+    assert "no-assertion" not in _patterns(result)
+
+
+def test_scanner_assert_lookalike_does_not_suppress_no_assertion():
+    for snippet in ("x.assertion()\n", "x.failure()\n"):
+        result = _scan([{"path": "t.py", "content": f"def test_a():\n    {snippet}"}])
+        assert "no-assertion" in _patterns(result)
+
+
+def test_scanner_real_unittest_asserts_suppress_no_assertion():
+    for snippet in ("self.assertEqual(a, b)\n", "self.fail('boom')\n"):
+        result = _scan([{"path": "t.py", "content": f"def test_a():\n    {snippet}"}])
+        assert "no-assertion" not in _patterns(result)
+
+
+def test_scanner_only_os_environ_is_global_access():
+    flagged = _scan(
+        [{"path": "t.py", "content": "import os\ndef test_a():\n    assert os.environ.get('X')\n"}]
+    )
+    assert "global-environ-access" in _patterns(flagged)
+    unflagged = _scan(
+        [{"path": "t.py", "content": "def test_a():\n    assert config.environ == 1\n"}]
+    )
+    assert "global-environ-access" not in _patterns(unflagged)
+
+
+def test_scanner_flags_called_attribute():
+    result = _scan([{"path": "t.py", "content": "def test_a(m):\n    assert m.called\n"}])
+    assert "call-count-assert" in _patterns(result)
+
+
 def test_scanner_caps_findings_and_marks_truncation():
     files = [{"path": f"t{i}.py", "content": "def test_a():\n    assert x\n"} for i in range(5)]
     result = _scan(files, max_findings=3)
