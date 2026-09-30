@@ -7,10 +7,12 @@ agent instructions and workflows, **not a PyPI testing framework**, distributabl
 replacement for a project's test runner. The root `pyproject.toml` is non-package virtual metadata for
 uv; it has no runtime dependencies or build backend.
 
-The collection promises framework-agnostic, evidence-driven black-box and parameterized testing.
-Skills can help an agent plan a behavior-focused test matrix, execute the repository's existing tests,
-and leave behind project-native tests plus an honest, reproducible evidence report. Generated examples
-and captured output are evidence to inspect, not proof that a program is correct.
+The collection promises framework-agnostic, evidence-driven black-box, parameterized, and
+audit workflows for Python projects. Skills can help an agent plan a behavior-focused test
+matrix, execute the repository's existing tests, or audit an existing suite for real
+fault-detection strength, and leave behind project-native tests or a severity scorecard plus
+an honest, reproducible evidence report. Generated examples and captured output are evidence
+to inspect, not proof that a program is correct.
 
 ## Skills
 
@@ -18,8 +20,9 @@ and captured output are evidence to inspect, not proof that a program is correct
 | --- | --- |
 | `python-blackbox-testing` | Testing a CLI's documented exit codes and output; characterizing a public HTTP or Python API; checking state transitions and observable side effects without coupling tests to private implementation details. |
 | `python-parameterized-testing` | Building a boundary matrix for a parser; combining fixed and generated inputs; testing Unicode and malformed data; replaying a seeded counterexample; or adding a property with an explicit oracle. |
+| `python-test-suite-audit` | Auditing an existing suite for tautological tests, weak assertions, over-mocking, private coupling, missing error paths, or order-dependent structure; producing a severity scorecard without changing code. |
 
-Each skill is independently installable. Neither requires the other, and both are designed to work
+Each skill is independently installable. None requires another, and all are designed to work
 with the conventions already present in the target repository.
 
 ## Which skill to use
@@ -29,9 +32,13 @@ with the conventions already present in the target repository.
 - `python-parameterized-testing` for domain and property depth on logic: input matrices, boundary
   families, generated witnesses with seeds and replay, and round-trip, invariant, or metamorphic
   properties with explicit oracles.
+- `python-test-suite-audit` for read-only suite health: grade whether existing tests detect
+  faults or inflate coverage, with Critical/Major/Minor severities and confirmation by
+  execution. Audit first, then use black-box or parameterized remediation without
+  auto-delegating.
 - Combine them on libraries with a CLI or a broad public surface: black-box for the acceptance
-  matrix, parameterized for the input-domain depth. Keep the skills independent; each owns its
-  workflow and its own evidence report.
+  matrix, parameterized for the input-domain depth, audit for suite health. Keep the skills
+  independent; each owns its workflow and its own evidence report.
 - Budget report verbosity on small targets: for a single side-effect-free function, the black-box
   lite profile collapses repeated isolation and approval text by reference instead of repeating it
   per row. No evidence field is dropped.
@@ -54,6 +61,12 @@ Install the parameterized testing skill:
 
 ```bash
 npx skills add nexusnv/python-agentic-skills --skill python-parameterized-testing
+```
+
+Install the test suite audit skill:
+
+```bash
+npx skills add nexusnv/python-agentic-skills --skill python-test-suite-audit
 ```
 
 The install commands above are **project-local by default** because they omit `--global`; keep the
