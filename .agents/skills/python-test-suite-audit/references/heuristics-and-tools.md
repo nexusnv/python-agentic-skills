@@ -55,6 +55,19 @@ severity above Minor.
 - **Ordering probe:** use `pytest-randomly`, `pytest-xdist`, or repeated focused reruns
   only when available or approved. Record seeds, retries, and every outcome.
 
+## Scanner scope notes
+
+The bundled `scripts/audit_assertions.py` helper is intentionally narrow:
+
+- It scans only top-level `test_*` functions and methods directly under a top-level
+  class, matching what pytest collects. Nested `test_*` helpers are ignored, and
+  asserts inside nested helpers do not satisfy the outer test.
+- Mock-echo detection is per-function: it requires a `return_value`/`side_effect`
+  keyword on a mock factory call (`Mock`, `MagicMock`, `patch`, `mocker.patch`,
+  ...) in the same test. Fixture-configured mocks need manual review.
+- Broad-except detection covers bare handlers plus `Exception`/`BaseException`,
+  including tuple forms such as `except (Exception, ValueError):`.
+
 ## False-positive control
 
 - Quote the exact test lines that triggered the pattern and name the dimension.

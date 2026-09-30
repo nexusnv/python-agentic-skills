@@ -63,39 +63,82 @@ def _validate_max_findings(payload: dict[str, Any]) -> int:
 
 
 def _test_functions(tree: ast.AST) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
-    return [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name.startswith("test")
-    ]
+    """Return only test functions pytest would collect.
+
+    Module-level ``test_*`` functions and methods directly under a top-level
+    class (e.g. ``Test*`` groupings) are collected. Nested functions are never
+    collected by pytest, so they are excluded here.
+    """
+    collected: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    for node in getattr(tree, "body", []):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.name.startswith("test"):
+                collected.append(node)
+        elif isinstance(node, ast.ClassDef):
+            for child in node.body:
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    if child.name.startswith("test"):
+                        collected.append(child)
+    return collected
 
 
-def _has_mock_import(tree: ast.AST) -> bool:
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module in {
-            "unittest.mock",
-            "unittest",
-            "mock",
-        }:
-            names = {alias.name for alias in node.names}
-            if names & {"Mock", "MagicMock", "patch", "mock_open", "AsyncMock"}:
-                return True
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.name in {"unittest.mock", "mock"} or alias.name.startswith(
-                    ("unittest.mock.", "mock.")
-                ):
-                    return True
+def _owned_nodes(func: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.AST]:
+    """Return descendant nodes owned by a test, excluding nested scopes.
+
+    Bodies of nested ``def``/``async def``/``class``/``lambda`` helpers belong
+    to a different scope and are never executed as part of the outer test body
+    itself, so their asserts and calls must not satisfy the outer test.
+    """
+    owned: list[ast.AST] = []
+    stack = list(ast.iter_child_nodes(func))
+    while stack:
+        node = stack.pop()
+        owned.append(node)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            continue
+        stack.extend(ast.iter_child_nodes(node))
+    return owned
+
+
+_MOCK_FACTORY_ATTRS = frozenset({"Mock", "MagicMock", "AsyncMock", "mock_open", "patch"})
+
+
+def _function_configures_mock(nodes: list[ast.AST]) -> bool:
+    """Check whether the test itself configures a mock object.
+
+    Requires a ``return_value``/``side_effect`` keyword on a call to a known
+    mock factory (``Mock``/``MagicMock``/``patch``/``mocker.patch``/...), so an
+    unrelated ``return_value`` keyword on a non-mock call is not flagged.
+    """
+    for node in nodes:
+        if not isinstance(node, ast.Call):
+            continue
+        if not any(kw.arg in {"return_value", "side_effect"} for kw in node.keywords):
+            continue
+        called = node.func
+        if isinstance(called, ast.Name) and called.id in _MOCK_FACTORY_ATTRS:
+            return True
+        if isinstance(called, ast.Attribute) and called.attr in _MOCK_FACTORY_ATTRS:
+            return True
     return False
 
 
-def _scan_function(
-    func: ast.FunctionDef | ast.AsyncFunctionDef, path: str, has_mock: bool
-) -> list[dict[str, Any]]:
+def _type_contains_broad_exception(node: ast.AST) -> bool:
+    """Recursively check for a broad base exception, including tuple forms."""
+    if isinstance(node, ast.Name):
+        return node.id in {"Exception", "BaseException"}
+    if isinstance(node, ast.Attribute):
+        return node.attr in {"Exception", "BaseException"}
+    if isinstance(node, ast.Tuple):
+        return any(_type_contains_broad_exception(elt) for elt in node.elts)
+    return False
+
+
+def _scan_function(func: ast.FunctionDef | ast.AsyncFunctionDef, path: str) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
-    asserts = [n for n in ast.walk(func) if isinstance(n, ast.Assert)]
-    calls = [n for n in ast.walk(func) if isinstance(n, ast.Call)]
+    owned = _owned_nodes(func)
+    asserts = [n for n in owned if isinstance(n, ast.Assert)]
+    calls = [n for n in owned if isinstance(n, ast.Call)]
 
     def evidence(node: ast.AST) -> str:
         try:
@@ -198,7 +241,7 @@ def _scan_function(
         local_names.add(func.args.vararg.arg)
     if func.args.kwarg is not None:
         local_names.add(func.args.kwarg.arg)
-    for node in ast.walk(func):
+    for node in owned:
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
             local_names.add(node.id)
         for alias in (
@@ -206,11 +249,9 @@ def _scan_function(
         ):
             local_names.add(alias.asname or alias.name.split(".")[0])
 
-    for node in ast.walk(func):
+    for node in owned:
         if isinstance(node, ast.ExceptHandler):
-            if node.type is None or (
-                isinstance(node.type, ast.Name) and node.type.id == "Exception"
-            ):
+            if node.type is None or _type_contains_broad_exception(node.type):
                 findings.append(
                     {
                         "dimension": "error depth",
@@ -263,21 +304,15 @@ def _scan_function(
                     }
                 )
 
-    if has_mock:
-        has_return_config = any(
-            isinstance(node, ast.keyword) and node.arg in {"return_value", "side_effect"}
-            for node in ast.walk(func)
-            for node in ([node] if isinstance(node, ast.keyword) else [])
+    if _function_configures_mock(owned) and asserts:
+        findings.append(
+            {
+                "dimension": "assertion rigor",
+                "location": f"{path}:{func.lineno}",
+                "evidence": f"def {func.name} configures a mock return and asserts",
+                "pattern": "mock-echo-suspect",
+            }
         )
-        if has_return_config and asserts:
-            findings.append(
-                {
-                    "dimension": "assertion rigor",
-                    "location": f"{path}:{func.lineno}",
-                    "evidence": f"def {func.name} configures a mock return and asserts",
-                    "pattern": "mock-echo-suspect",
-                }
-            )
     return findings
 
 
@@ -311,9 +346,8 @@ def scan_test_files(payload: Any) -> dict[str, Any]:
             else:
                 truncated = True
             continue
-        has_mock = _has_mock_import(tree)
         for func in _test_functions(tree):
-            for item in _scan_function(func, path, has_mock):
+            for item in _scan_function(func, path):
                 counter += 1
                 if len(findings) < max_findings:
                     findings.append(

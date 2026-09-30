@@ -198,6 +198,77 @@ def test_scanner_marks_unparseable_file_without_crashing():
     assert _patterns(result) == ["unparseable-file"]
 
 
+def test_scanner_ignores_nested_test_function():
+    content = "def test_outer():\n    x = 1\n    def test_inner():\n        assert x == 1\n"
+    result = _scan([{"path": "t.py", "content": content}])
+    assert _patterns(result) == ["no-assertion"]
+    assert all(f["location"] == "t.py:1" for f in result["findings"])
+
+
+def test_scanner_nested_helper_assert_does_not_satisfy_outer():
+    content = "def test_outer():\n    def helper():\n        assert 1 == 1\n"
+    result = _scan([{"path": "t.py", "content": content}])
+    assert "no-assertion" in _patterns(result)
+
+
+def test_scanner_ignores_weak_assert_inside_nested_helper():
+    content = "def test_outer():\n    assert 1 == 1\n    def helper():\n        assert x\n"
+    result = _scan([{"path": "t.py", "content": content}])
+    assert _patterns(result) == []
+
+
+def test_scanner_collects_class_method_tests():
+    content = "class TestThing:\n    def test_m(self):\n        assert 1 == 1\n"
+    result = _scan([{"path": "t.py", "content": content}])
+    assert _patterns(result) == []
+
+
+def test_scanner_mock_echo_is_per_function():
+    content = (
+        "from unittest.mock import Mock\n"
+        "def test_a():\n"
+        "    m = Mock(return_value=1)\n"
+        "    assert m() == 1\n"
+        "def test_b():\n"
+        "    build(return_value=2)\n"
+        "    assert 1 == 1\n"
+    )
+    result = _scan([{"path": "t.py", "content": content}])
+    echoes = [f for f in result["findings"] if f["pattern"] == "mock-echo-suspect"]
+    assert len(echoes) == 1
+    assert echoes[0]["location"] == "t.py:2"
+
+
+def test_scanner_flags_mocker_patch_mock_echo():
+    content = "def test_a(mocker):\n    mocker.patch('x.y', return_value=1)\n    assert 1 == 1\n"
+    result = _scan([{"path": "t.py", "content": content}])
+    assert "mock-echo-suspect" in _patterns(result)
+
+
+def test_scanner_flags_tuple_broad_except():
+    content = (
+        "def test_a():\n"
+        "    try:\n"
+        "        f()\n"
+        "    except (Exception, ValueError):\n"
+        "        assert 1 == 1\n"
+    )
+    result = _scan([{"path": "t.py", "content": content}])
+    assert "broad-except" in _patterns(result)
+
+
+def test_scanner_ignores_narrow_tuple_except():
+    content = (
+        "def test_a():\n"
+        "    try:\n"
+        "        f()\n"
+        "    except (ValueError, KeyError):\n"
+        "        assert 1 == 1\n"
+    )
+    result = _scan([{"path": "t.py", "content": content}])
+    assert "broad-except" not in _patterns(result)
+
+
 def test_scanner_caps_findings_and_marks_truncation():
     files = [{"path": f"t{i}.py", "content": "def test_a():\n    assert x\n"} for i in range(5)]
     result = _scan(files, max_findings=3)
