@@ -141,9 +141,7 @@ def test_scanner_flags_cast_call():
             {
                 "path": "m.py",
                 "content": (
-                    "from typing import cast\n"
-                    "def f(a: object) -> int:\n"
-                    "    return cast(int, a)\n"
+                    "from typing import cast\ndef f(a: object) -> int:\n    return cast(int, a)\n"
                 ),
             }
         ]
