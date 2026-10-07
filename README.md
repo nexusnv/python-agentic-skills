@@ -57,7 +57,7 @@ npx skills add nexusnv/python-agentic-skills --skill python-parameterized-testin
 ```
 
 The install commands above are **project-local by default** because they omit `--global`; keep the
-canonical skill sources in `.agents/skills/`. For a personal installation shared across projects, add
+canonical skill sources in `src/`. For a personal installation shared across projects, add
 `--global`:
 
 ```bash
@@ -65,8 +65,9 @@ npx skills add nexusnv/python-agentic-skills --skill python-blackbox-testing --g
 ```
 
 Choose a global installation only for tools intentionally available across projects. Do not create a
-duplicate `skills/` tree alongside `.agents/skills/`; the canonical location is the single source of
-truth.
+duplicate `skills/` tree alongside `src/`; the canonical location is the single source of
+truth. A `.agents/skills/` copy is machine-local only (local agent discovery and testing) and
+is never committed.
 
 `skills.sh.json` only groups the repository page in the skills.sh catalog. It is not an install
 manifest and does not replace the install commands above.

@@ -11,7 +11,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).parents[1]
-SKILLS_ROOT = ROOT / ".agents" / "skills"
+SKILLS_ROOT = ROOT / "src"
 HELPER = SKILLS_ROOT / "python-parameterized-testing" / "scripts" / "plan_case_matrix.py"
 REQUIRED_HEADINGS = {
     "## Non-negotiable rules",
