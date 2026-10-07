@@ -166,6 +166,68 @@ TEMPLATE_SECTION_MARKERS = {
             ),
         ),
     ),
+    "python-type-safety": (
+        (
+            "Scope",
+            (
+                "- Typing target or public boundary:",
+                "- Consumer and contract:",
+                "- Checker and mode:",
+                "- Property statements and quantified invariants:",
+                "- Coverage areas/plan:",
+            ),
+        ),
+        (
+            "Checker and environment",
+            (
+                "## Checker and environment",
+                "- Project-native checker and version:",
+                "- Environment fingerprint",
+                "- Baseline error count:",
+                "- Approval status for permitted non-sensitive live, destructive, or "
+                "cost-incurring work:",
+            ),
+        ),
+        (
+            "Findings",
+            (
+                "## Findings",
+                "| finding_id |",
+                "| severity |",
+                "| dimension |",
+            ),
+        ),
+        (
+            "Exact executions",
+            (
+                "## Exact executions",
+                "| execution_id |",
+            ),
+        ),
+        (
+            "Results",
+            (
+                "## Results",
+                "pass / fail / skip / expected-failure",
+            ),
+        ),
+        (
+            "Not run and skips",
+            (
+                "## Not run and skips",
+                "not-run / skip / expected-failure",
+            ),
+        ),
+        (
+            "Limitations and conclusion",
+            (
+                "## Limitations and conclusion",
+                "- What the typing loop establishes:",
+                "- What the typing loop does not establish:",
+                "- Coverage gaps and discarded/truncated families:",
+            ),
+        ),
+    ),
 }
 TEMPLATE_TABLE_REQUIREMENTS = {
     "python-blackbox-testing": (
@@ -263,6 +325,63 @@ TEMPLATE_TABLE_REQUIREMENTS = {
             {"result state": ("not-run",)},
         ),
     ),
+    "python-type-safety": (
+        (
+            "Findings",
+            (
+                "finding id",
+                "severity",
+                "dimension",
+                "location",
+                "evidence",
+                "risk if ignored",
+                "proposed remediation",
+                "confirmed",
+            ),
+            {"severity": ("Critical / Major / Minor",)},
+        ),
+        (
+            "Exact executions",
+            (
+                "execution id",
+                "case ids",
+                "working directory (project-relative or redacted)",
+                "exact command (redacted, structure preserved)",
+                "replay note",
+                "exit status",
+                "runner",
+                "environment",
+                "bounded evidence",
+            ),
+            {},
+        ),
+        (
+            "Results",
+            (
+                "case id",
+                "execution id",
+                "result state",
+                "observed outcome",
+                "oracle result",
+                "evidence reference",
+                "retry of",
+                "notes",
+            ),
+            {"result state": ("pass / fail / skip / expected-failure",)},
+        ),
+        (
+            "Not run and skips",
+            (
+                "case id or coverage area",
+                "result state",
+                "reason",
+                "command",
+                "exit status",
+                "coverage impact",
+            ),
+            {"result state": ("not-run",)},
+        ),
+    ),
 }
 FIXTURE_REQUIRED_REPORT_FIELDS = {
     "python-blackbox-testing": frozenset(
@@ -309,6 +428,33 @@ FIXTURE_REQUIRED_REPORT_FIELDS = {
             "finite_samples_are_not_proof",
         }
     ),
+    "python-type-safety": frozenset(
+        {
+            "typing_profile",
+            "checker_selection",
+            "properties_invariants",
+            "coverage_areas_plan",
+            "baseline_error_count",
+            "error_count_before_after",
+            "annotation_coverage_delta",
+            "finding_severity",
+            "dimension",
+            "finding_location",
+            "finding_evidence",
+            "proposed_remediation",
+            "confirmed_status",
+            "checker_divergences",
+            "seed",
+            "runner",
+            "environment",
+            "exact_commands",
+            "process_exit_statuses",
+            "pass_fail_skip_expected_failure_and_not_run_results",
+            "coverage_gaps",
+            "limitations",
+            "static_advisory_boundary",
+        }
+    ),
 }
 BLACKBOX_FIXTURE_CONTRACT_LANGUAGE = {
     "not-run reporting": r"not run",
@@ -332,6 +478,24 @@ PARAMETERIZED_FIXTURE_CONTRACT_LANGUAGE = {
     "finite-sample limitation": r"exhaustive proof|not proof",
     "limitations": r"limitation",
 }
+TYPESAFETY_FIXTURE_CONTRACT_LANGUAGE = {
+    "properties": r"propert",
+    "coverage": r"coverage",
+    "checker": r"checker|mypy|pyright",
+    "severity": r"sever",
+    "dimension": r"dimension",
+    "confirmation": r"confirm",
+    "advisory boundary": r"advisory",
+    "limitations": r"limitation",
+}
+
+
+def _fixture_language_for(skill_name: str) -> dict[str, str]:
+    if skill_name == "python-blackbox-testing":
+        return BLACKBOX_FIXTURE_CONTRACT_LANGUAGE
+    if skill_name == "python-type-safety":
+        return TYPESAFETY_FIXTURE_CONTRACT_LANGUAGE
+    return PARAMETERIZED_FIXTURE_CONTRACT_LANGUAGE
 
 
 @dataclass(frozen=True)
@@ -357,11 +521,7 @@ REPORT_CONTRACTS = {
             for table_requirements in TEMPLATE_TABLE_REQUIREMENTS[skill_name]
         ),
         required_fixture_fields=FIXTURE_REQUIRED_REPORT_FIELDS[skill_name],
-        fixture_language=(
-            BLACKBOX_FIXTURE_CONTRACT_LANGUAGE
-            if skill_name == "python-blackbox-testing"
-            else PARAMETERIZED_FIXTURE_CONTRACT_LANGUAGE
-        ),
+        fixture_language=_fixture_language_for(skill_name),
     )
     for skill_name in TEMPLATE_SECTION_MARKERS
 }
