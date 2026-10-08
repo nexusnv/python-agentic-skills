@@ -61,7 +61,9 @@ confirm nothing with pattern-matching alone: only a checker run confirms a findi
 ## Workflow
 
 1. **Classify and scope.** Name the typing target, public boundary, consumer, checker,
-   and mode (full loop or read-only). Cover broadly by default; honor a user focus
+   and mode (full loop or read-only). Identify the primary checker from project
+   automation per `references/checker-gates.md`; ask the user if that leaves it
+   ambiguous. Cover broadly by default; honor a user focus
    and disclose exclusions. Load `references/checker-gates.md` for checker selection
    and strictness levels.
 2. **Inventory and baseline.** Read checker configs (`mypy.ini` / `setup.cfg` /
@@ -78,7 +80,8 @@ confirm nothing with pattern-matching alone: only a checker run confirms a findi
 5. **Cross-check and finish honestly.** Run the second checker report-only, record
    divergences without chasing them, and save the evidence report per
    `references/evidence-report.md`: exact commands and exit statuses, error counts
-   before and after, coverage delta, divergences, gaps, limitations, and not-run work.
+   before and after, coverage delta (scanner summary counts before and after plus
+   checker error counts), divergences, gaps, limitations, and not-run work.
 
 ## Failure handling
 

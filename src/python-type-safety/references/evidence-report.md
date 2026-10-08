@@ -33,6 +33,7 @@ advisory until a checker run confirms them.
 - Working directory (project-relative or redacted):
 - Environment fingerprint (runtime, OS, locale, timezone, and non-sensitive settings):
 - Baseline error count:
+- Final error count:
 - Typing budget: files / errors / checker runs / time
 - Approval status for permitted non-sensitive live, destructive, or cost-incurring work:
 - Synthetic data and isolation:

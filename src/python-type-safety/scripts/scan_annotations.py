@@ -70,19 +70,64 @@ def _contains_any(annotation: ast.expr) -> bool:
             return True
         if isinstance(node, ast.Attribute) and node.attr == "Any":
             return True
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and re.search(r"\bAny\b", node.value) is not None
+        ):
+            return True
     return False
 
 
-def _scan_functions(path: str, tree: ast.AST, emit: Any) -> None:
+def _is_staticmethod(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    for decorator in func.decorator_list:
+        if isinstance(decorator, ast.Name) and decorator.id == "staticmethod":
+            return True
+        if isinstance(decorator, ast.Attribute) and decorator.attr == "staticmethod":
+            return True
+    return False
+
+
+def _method_nodes(tree: ast.AST) -> set[int]:
+    """Ids of functions defined directly in a class body (possible receivers)."""
+    found: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            for child in node.body:
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    found.add(id(child))
+    return found
+
+
+def _is_receiver_arg(
+    func: ast.FunctionDef | ast.AsyncFunctionDef,
+    methods: set[int],
+    positionals: tuple[ast.arg, ...],
+    arg: ast.arg,
+) -> bool:
+    """True when arg is the conventional receiver of an instance/class method."""
+    return (
+        arg.arg in ("self", "cls")
+        and id(func) in methods
+        and not _is_staticmethod(func)
+        and bool(positionals)
+        and arg is positionals[0]
+    )
+
+
+def _scan_functions(path: str, tree: ast.AST, emit: Any, counts: dict[str, int]) -> None:
     """Check every function definition, including nested ones.
 
     Nested functions are visited with ast.walk because annotation coverage
     matters at every level: an unannotated closure is as unchecked as an
     unannotated top-level function.
     """
+    methods = _method_nodes(tree)
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
+        counts["functions"] += 1
+        positionals = (*node.args.posonlyargs, *node.args.args)
         parameters: list[tuple[ast.arg, str]] = [
             (arg, arg.arg)
             for arg in (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs)
@@ -91,9 +136,27 @@ def _scan_functions(path: str, tree: ast.AST, emit: Any) -> None:
             parameters.append((node.args.vararg, f"*{node.args.vararg.arg}"))
         if node.args.kwarg is not None:
             parameters.append((node.args.kwarg, f"**{node.args.kwarg.arg}"))
-        for arg, display in parameters:
-            if arg.arg in ("self", "cls"):
-                continue
+
+        eligible = [
+            (arg, display)
+            for arg, display in parameters
+            if not _is_receiver_arg(node, methods, positionals, arg)
+        ]
+        if node.type_comment is not None:
+            counts["args_total"] += len(eligible)
+            counts["args_annotated"] += len(eligible)
+            counts["returns_total"] += 1
+            counts["returns_annotated"] += 1
+            if re.search(r"\bAny\b", node.type_comment) is not None:
+                emit(
+                    "any-annotation",
+                    "annotation precision",
+                    f"{path}:{node.lineno}",
+                    f"def {node.name} type comment uses Any",
+                )
+            continue
+        for arg, display in eligible:
+            counts["args_total"] += 1
             if arg.annotation is None:
                 emit(
                     "unannotated-arg",
@@ -101,13 +164,16 @@ def _scan_functions(path: str, tree: ast.AST, emit: Any) -> None:
                     f"{path}:{node.lineno}",
                     f"def {node.name} has unannotated arg {display}",
                 )
-            elif _contains_any(arg.annotation):
-                emit(
-                    "any-annotation",
-                    "annotation precision",
-                    f"{path}:{arg.lineno}",
-                    f"def {node.name} annotates {display} as Any",
-                )
+            else:
+                counts["args_annotated"] += 1
+                if _contains_any(arg.annotation):
+                    emit(
+                        "any-annotation",
+                        "annotation precision",
+                        f"{path}:{arg.lineno}",
+                        f"def {node.name} annotates {display} as Any",
+                    )
+        counts["returns_total"] += 1
         if node.returns is None:
             emit(
                 "missing-return",
@@ -115,12 +181,30 @@ def _scan_functions(path: str, tree: ast.AST, emit: Any) -> None:
                 f"{path}:{node.lineno}",
                 f"def {node.name} has no return annotation",
             )
-        elif _contains_any(node.returns):
+        else:
+            counts["returns_annotated"] += 1
+            if _contains_any(node.returns):
+                emit(
+                    "any-annotation",
+                    "annotation precision",
+                    f"{path}:{node.returns.lineno}",
+                    f"def {node.name} returns Any",
+                )
+
+
+def _scan_annassigns(path: str, tree: ast.AST, emit: Any) -> None:
+    """Flag `Any` on annotated variable and attribute assignments."""
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.AnnAssign)
+            and node.annotation is not None
+            and _contains_any(node.annotation)
+        ):
             emit(
                 "any-annotation",
                 "annotation precision",
-                f"{path}:{node.returns.lineno}",
-                f"def {node.name} returns Any",
+                f"{path}:{node.lineno}",
+                "annotated assignment uses Any",
             )
 
 
@@ -157,6 +241,13 @@ def scan_source_files(payload: Any) -> dict[str, Any]:
     files, max_findings = _validate_payload(payload)
     findings: list[dict[str, Any]] = []
     truncated = False
+    counts = {
+        "functions": 0,
+        "args_annotated": 0,
+        "args_total": 0,
+        "returns_annotated": 0,
+        "returns_total": 0,
+    }
 
     def emit(pattern: str, dimension: str, location: str, evidence: str) -> None:
         nonlocal truncated
@@ -178,14 +269,26 @@ def scan_source_files(payload: Any) -> dict[str, Any]:
         path = entry["path"]
         content = entry["content"]
         try:
-            tree = ast.parse(content)
+            tree = ast.parse(content, type_comments=True)
         except (SyntaxError, ValueError) as error:
             emit("unparseable-file", "executability", f"{path}:1", str(error)[:200])
             continue
-        _scan_functions(path, tree, emit)
+        _scan_functions(path, tree, emit, counts)
+        _scan_annassigns(path, tree, emit)
         _scan_casts(path, tree, emit)
         _scan_bare_ignores(path, content, emit)
-    return {"findings": findings, "truncated": truncated}
+    return {
+        "findings": findings,
+        "truncated": truncated,
+        "summary": {
+            "files_scanned": len(files),
+            "functions_scanned": counts["functions"],
+            "args_annotated": counts["args_annotated"],
+            "args_total": counts["args_total"],
+            "returns_annotated": counts["returns_annotated"],
+            "returns_total": counts["returns_total"],
+        },
+    }
 
 
 def _parser() -> argparse.ArgumentParser:

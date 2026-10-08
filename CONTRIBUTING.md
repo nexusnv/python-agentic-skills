@@ -31,7 +31,7 @@ Use a short, lowercase, kebab-case name that describes the capability, such as
 `SKILL.md` at its root. Keep `src/` as the only canonical skill tree; do not mirror content
 under `skills/` or commit a copy under `.agents/skills/` (a `.agents/skills/` copy is
 machine-local only, for local agent discovery and testing — refresh it with
-`cp -r src/<skill> .agents/skills/` and never commit it).
+`mkdir -p .agents/skills && cp -r src/<skill> .agents/skills/` and never commit it).
 
 ### Portable frontmatter
 
@@ -168,6 +168,7 @@ reproducible; bump the pin deliberately and record the re-verification:
 ```bash
 uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-blackbox-testing
 uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-parameterized-testing
+uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-test-suite-audit
 uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-type-safety
 ```
 

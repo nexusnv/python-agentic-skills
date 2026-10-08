@@ -18,8 +18,9 @@ needs 3.10, `ParamSpec` needs 3.10, `match` narrowing needs 3.10).
 
 ## Generics and overloads
 
-- **TypeVars:** bind with `bound=` where the contract names one; avoid
-  unbounded `TypeVar` on public boundaries.
+- **TypeVars:** use an unbounded `TypeVar` when it expresses a real input/output
+  relationship (identity functions, generic containers); bind with `bound=` only
+  when the contract imposes that restriction.
 - **Overloads:** use `@overload` only when one signature cannot express the
   boundary; keep the implementation signature compatible with every overload.
 - **TypedDict and dataclasses:** prefer `TypedDict` for fixed-shape mappings
@@ -30,7 +31,9 @@ needs 3.10, `ParamSpec` needs 3.10, `match` narrowing needs 3.10).
 - **Narrow with `assert` or `isinstance`:** never silence a narrowing error with
   `cast` when an assertion expresses the invariant.
 - **`Never` and `NoReturn`:** mark exhaustive branches and never-returning
-  helpers so the checker verifies exhaustiveness.
+  helpers so the checker verifies exhaustiveness. `typing.Never` needs Python
+  3.11+; below that floor use `typing_extensions.Never`, or `NoReturn` where
+  the semantics fit.
 - **No untyped defs:** every function needs full annotations including the
   return type; `__init__` needs `-> None`.
 

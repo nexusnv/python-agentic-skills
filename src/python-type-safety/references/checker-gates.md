@@ -7,8 +7,11 @@ error codes, or reviewing cross-checker divergences.
 
 - Use the project's configured checker. If `mypy.ini`, `setup.cfg`/`pyproject.toml`
   `[tool.mypy]`, or `pyrightconfig.json` exists, that checker wins without debate.
-- If none is configured, ask mypy vs pyright once, then record the choice and the
-  reason. Never silently install either; propose the install and ask first.
+- **Primary selection:** the primary gate is the checker wired into project
+  automation — pre-commit config, CI workflow, or tox/nox sessions, in that
+  order of precedence. If both checkers are automated or neither is, ask the
+  user to choose and record the choice with its reason. Never silently install
+  either checker; propose the install and ask first.
 
 ## Strictness levels
 
@@ -16,9 +19,14 @@ error codes, or reviewing cross-checker divergences.
   enable explicitly and record each relaxed flag as a gap: `disallow_untyped_defs`,
   `disallow_any_generics`, `warn_return_any`, `warn_unused_ignores`,
   `no_implicit_optional`, `strict_equality`.
-- **pyright baseline:** `typeCheckingMode = "standard"`, raising to `"strict"`
-  when the error budget allows. Record the mode and every overridden diagnostic
-  rule in the report.
+- **pyright gate:** `typeCheckingMode = "strict"` is required. `standard` mode is
+  a non-strict stepping stone only: it may be used within an explicit error
+  budget with the unknown-type diagnostics (`reportUnknownParameterType`,
+  `reportUnknownVariableType`, `reportUnknownMemberType`,
+  `reportMissingParameterType`) enabled, and every deviation from strict is
+  recorded as a gap. A zero-error `standard` run is never presented as a
+  strict gate. Record the mode and every overridden diagnostic rule in the
+  report.
 
 ## Fix patterns (most common codes first)
 

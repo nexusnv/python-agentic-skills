@@ -111,6 +111,97 @@ def test_scanner_skips_self_and_cls():
     assert _patterns(result) == []
 
 
+def test_scanner_skips_classmethod_cls():
+    result = _scan(
+        [
+            {
+                "path": "m.py",
+                "content": (
+                    "class C:\n    @classmethod\n    def m(cls, x: int) -> int:\n        return x\n"
+                ),
+            }
+        ]
+    )
+    assert _patterns(result) == []
+
+
+def test_scanner_flags_self_in_free_function():
+    result = _scan([{"path": "m.py", "content": "def f(self):\n    return self\n"}])
+    patterns = _patterns(result)
+    assert "unannotated-arg" in patterns
+    assert "missing-return" in patterns
+
+
+def test_scanner_flags_self_in_staticmethod():
+    result = _scan(
+        [
+            {
+                "path": "m.py",
+                "content": ("class C:\n    @staticmethod\n    def m(self):\n        return self\n"),
+            }
+        ]
+    )
+    assert "unannotated-arg" in _patterns(result)
+
+
+def test_scanner_honors_signature_type_comment():
+    result = _scan(
+        [
+            {
+                "path": "m.py",
+                "content": "def f(a, b):\n    # type: (int, int) -> int\n    return a\n",
+            }
+        ]
+    )
+    assert _patterns(result) == []
+
+
+def test_scanner_flags_any_in_type_comment():
+    result = _scan(
+        [
+            {
+                "path": "m.py",
+                "content": "def f(a, b):\n    # type: (Any, int) -> int\n    return a\n",
+            }
+        ]
+    )
+    assert "any-annotation" in _patterns(result)
+
+
+def test_scanner_flags_quoted_any_forward_reference():
+    for annotation in ('"Any"', '"list[Any]"'):
+        result = _scan(
+            [{"path": "m.py", "content": f"def f(a: {annotation}) -> int:\n    return 1\n"}]
+        )
+        assert "any-annotation" in _patterns(result)
+
+
+def test_scanner_ignores_any_substring_in_forward_reference():
+    result = _scan([{"path": "m.py", "content": 'def f(a: "Anything") -> int:\n    return 1\n'}])
+    assert "any-annotation" not in _patterns(result)
+
+
+def test_scanner_flags_any_on_annotated_assignment():
+    module = _scan([{"path": "m.py", "content": "x: Any = 1\n"}])
+    assert "any-annotation" in _patterns(module)
+    klass = _scan([{"path": "m.py", "content": "class C:\n    x: Any = 1\n"}])
+    assert "any-annotation" in _patterns(klass)
+    clean = _scan([{"path": "m.py", "content": "y: int = 1\n"}])
+    assert "any-annotation" not in _patterns(clean)
+
+
+def test_scanner_reports_coverage_summary_counts():
+    result = _scan([{"path": "m.py", "content": "def f(a, b: int) -> int:\n    return 1\n"}])
+    assert result["summary"] == {
+        "files_scanned": 1,
+        "functions_scanned": 1,
+        "args_annotated": 1,
+        "args_total": 2,
+        "returns_annotated": 1,
+        "returns_total": 1,
+    }
+
+
 def test_scanner_flags_missing_return():
     result = _scan([{"path": "m.py", "content": "def f(a: int):\n    print(a)\n"}])
     assert "missing-return" in _patterns(result)
