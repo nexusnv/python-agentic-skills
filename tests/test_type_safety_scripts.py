@@ -273,6 +273,7 @@ def test_type_scanner_rejects_malformed_json(text):
     [
         {"files": [], "max_findings": 10},
         {"files": [{"path": "", "content": "x"}], "max_findings": 10},
+        {"files": [{"path": "   ", "content": "x"}], "max_findings": 10},
         {"files": [{"path": "a.py", "content": "x"}]},
         {"files": [{"path": "a.py", "content": "x"}], "max_findings": True},
         {"files": [{"path": "a.py", "content": "x"}], "max_findings": 10, "nope": 1},

@@ -54,7 +54,7 @@ def _validate_payload(payload: Any) -> tuple[list[dict[str, str]], int]:
             raise InputError(f"unknown file field: {unknown_fields[0]!r}")
         path = entry.get("path")
         content = entry.get("content")
-        if not isinstance(path, str) or not path:
+        if not isinstance(path, str) or not path.strip():
             raise InputError("file path must be a non-empty string")
         if not isinstance(content, str):
             raise InputError("file content must be a string")
