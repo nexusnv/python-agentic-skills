@@ -7,10 +7,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = (
-    Path(__file__).parents[1]
-    / ".agents/skills/python-parameterized-testing/scripts/plan_case_matrix.py"
-)
+SCRIPT = Path(__file__).parents[1] / "src/python-parameterized-testing/scripts/plan_case_matrix.py"
 SPEC = importlib.util.spec_from_file_location("plan_case_matrix", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 HELPER = importlib.util.module_from_spec(SPEC)

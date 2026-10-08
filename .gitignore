@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Machine-local agent discovery copies of the canonical src/ skills.
+# The checked-in source of truth is src/; a .agents/skills/ copy exists only
+# on individual machines for local agent discovery and testing.
+.agents/

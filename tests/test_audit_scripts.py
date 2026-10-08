@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).parents[1]
-AUDIT_DIR = ROOT / ".agents" / "skills" / "python-test-suite-audit" / "scripts"
+AUDIT_DIR = ROOT / "src" / "python-test-suite-audit" / "scripts"
 SCANNER = AUDIT_DIR / "audit_assertions.py"
 PLANNER = AUDIT_DIR / "plan_audit_scope.py"
 

@@ -13,7 +13,9 @@ These rules apply to agents working in this repository.
 
 ## Skill authoring
 
-- `.agents/skills/` is the canonical skill location. Do not add a duplicate `skills/` tree.
+- `src/` is the canonical skill location. Do not add a duplicate `skills/` tree. A
+  `.agents/skills/` copy is machine-local only (for local agent discovery and
+  testing) and is never committed; refresh it by copying from `src/`.
 - Keep each `SKILL.md` concise and operational: give the agent a clear trigger, an executable workflow,
   safety gates, outputs, and stop conditions. Move detail into focused reference files.
 - Load references on demand from `SKILL.md`; do not duplicate reference material inline.

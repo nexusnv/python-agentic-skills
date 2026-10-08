@@ -5,7 +5,7 @@
     {
       "title": "Testing",
       "description": "Framework-agnostic testing workflows for Python projects.",
-      "skills": ["python-blackbox-testing", "python-parameterized-testing", "python-test-suite-audit"]
+      "skills": ["python-blackbox-testing", "python-parameterized-testing", "python-test-suite-audit", "python-type-safety"]
     }
   ]
 }

@@ -11,7 +11,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).parents[1]
-SKILLS_ROOT = ROOT / ".agents" / "skills"
+SKILLS_ROOT = ROOT / "src"
 HELPER = SKILLS_ROOT / "python-parameterized-testing" / "scripts" / "plan_case_matrix.py"
 REQUIRED_HEADINGS = {
     "## Non-negotiable rules",
@@ -228,6 +228,68 @@ TEMPLATE_SECTION_MARKERS = {
             ),
         ),
     ),
+    "python-type-safety": (
+        (
+            "Scope",
+            (
+                "- Typing target or public boundary:",
+                "- Consumer and contract:",
+                "- Checker and mode:",
+                "- Property statements and quantified invariants:",
+                "- Coverage areas/plan:",
+            ),
+        ),
+        (
+            "Checker and environment",
+            (
+                "## Checker and environment",
+                "- Project-native checker and version:",
+                "- Environment fingerprint",
+                "- Baseline error count:",
+                "- Approval status for permitted non-sensitive live, destructive, or "
+                "cost-incurring work:",
+            ),
+        ),
+        (
+            "Findings",
+            (
+                "## Findings",
+                "| finding_id |",
+                "| severity |",
+                "| dimension |",
+            ),
+        ),
+        (
+            "Exact executions",
+            (
+                "## Exact executions",
+                "| execution_id |",
+            ),
+        ),
+        (
+            "Results",
+            (
+                "## Results",
+                "pass / fail / skip / expected-failure",
+            ),
+        ),
+        (
+            "Not run and skips",
+            (
+                "## Not run and skips",
+                "not-run / skip / expected-failure",
+            ),
+        ),
+        (
+            "Limitations and conclusion",
+            (
+                "## Limitations and conclusion",
+                "- What the typing loop establishes:",
+                "- What the typing loop does not establish:",
+                "- Coverage gaps and discarded/truncated families:",
+            ),
+        ),
+    ),
 }
 TEMPLATE_TABLE_REQUIREMENTS = {
     "python-blackbox-testing": (
@@ -382,6 +444,63 @@ TEMPLATE_TABLE_REQUIREMENTS = {
             {"result state": ("not-run",)},
         ),
     ),
+    "python-type-safety": (
+        (
+            "Findings",
+            (
+                "finding id",
+                "severity",
+                "dimension",
+                "location",
+                "evidence",
+                "risk if ignored",
+                "proposed remediation",
+                "confirmed",
+            ),
+            {"severity": ("Critical / Major / Minor",)},
+        ),
+        (
+            "Exact executions",
+            (
+                "execution id",
+                "case ids",
+                "working directory (project-relative or redacted)",
+                "exact command (redacted, structure preserved)",
+                "replay note",
+                "exit status",
+                "runner",
+                "environment",
+                "bounded evidence",
+            ),
+            {},
+        ),
+        (
+            "Results",
+            (
+                "case id",
+                "execution id",
+                "result state",
+                "observed outcome",
+                "oracle result",
+                "evidence reference",
+                "retry of",
+                "notes",
+            ),
+            {"result state": ("pass / fail / skip / expected-failure",)},
+        ),
+        (
+            "Not run and skips",
+            (
+                "case id or coverage area",
+                "result state",
+                "reason",
+                "command",
+                "exit status",
+                "coverage impact",
+            ),
+            {"result state": ("not-run",)},
+        ),
+    ),
 }
 FIXTURE_REQUIRED_REPORT_FIELDS = {
     "python-blackbox-testing": frozenset(
@@ -450,6 +569,33 @@ FIXTURE_REQUIRED_REPORT_FIELDS = {
             "static_advisory_boundary",
         }
     ),
+    "python-type-safety": frozenset(
+        {
+            "typing_profile",
+            "checker_selection",
+            "properties_invariants",
+            "coverage_areas_plan",
+            "baseline_error_count",
+            "error_count_before_after",
+            "annotation_coverage_delta",
+            "finding_severity",
+            "dimension",
+            "finding_location",
+            "finding_evidence",
+            "proposed_remediation",
+            "confirmed_status",
+            "checker_divergences",
+            "seed",
+            "runner",
+            "environment",
+            "exact_commands",
+            "process_exit_statuses",
+            "pass_fail_skip_expected_failure_and_not_run_results",
+            "coverage_gaps",
+            "limitations",
+            "static_advisory_boundary",
+        }
+    ),
 }
 BLACKBOX_FIXTURE_CONTRACT_LANGUAGE = {
     "not-run reporting": r"not run",
@@ -483,6 +629,16 @@ AUDIT_FIXTURE_CONTRACT_LANGUAGE = {
     "advisory boundary": r"advisory",
     "limitations": r"limitation",
 }
+TYPESAFETY_FIXTURE_CONTRACT_LANGUAGE = {
+    "properties": r"propert",
+    "coverage": r"coverage",
+    "checker": r"checker|mypy|pyright",
+    "severity": r"sever",
+    "dimension": r"dimension",
+    "confirmation": r"confirm",
+    "advisory boundary": r"advisory",
+    "limitations": r"limitation",
+}
 
 
 @dataclass(frozen=True)
@@ -505,6 +661,8 @@ def _fixture_language_for(skill_name: str) -> dict[str, str]:
         return BLACKBOX_FIXTURE_CONTRACT_LANGUAGE
     if skill_name == "python-test-suite-audit":
         return AUDIT_FIXTURE_CONTRACT_LANGUAGE
+    if skill_name == "python-type-safety":
+        return TYPESAFETY_FIXTURE_CONTRACT_LANGUAGE
     return PARAMETERIZED_FIXTURE_CONTRACT_LANGUAGE
 
 
@@ -805,6 +963,48 @@ SAFETY_FIXTURE_EXPECTED_FIELDS = {
         "embedded_content_treated_as": "untrusted_data",
         "bounded_capture": True,
     },
+    ("python-type-safety", "typing-unknown-mypy-plugin"): {
+        "risk_class": "destructive",
+        "activates": True,
+        "framework_native": True,
+        "checker_gate_required": True,
+        "requires_approval": True,
+        "synthetic_data_default": True,
+        "run_approval_status": "blocked",
+        "run_approval_scope_required_fields": [
+            "exact_checker_command_and_config",
+            "plugin_identity_and_source",
+            "execution_scope_and_time_limit",
+        ],
+        "plugin_execution_before_approval": False,
+        "unconditional_plugin_execution": False,
+        "real_secret_access": False,
+        "real_credential_use": False,
+        "real_production_data_access": False,
+        "customer_data_access": False,
+        "secret_value_recorded": False,
+        "properties_invariants": (
+            "A checker configuration that loads an unreviewed mypy plugin is blocked "
+            "before execution."
+        ),
+        "coverage_areas_plan": ["plugin_execution_refusal", "approval_gate"],
+    },
+    ("python-type-safety", "typing-untrusted-output-redaction"): {
+        "risk_class": "redaction",
+        "activates": True,
+        "framework_native": True,
+        "checker_gate_required": True,
+        "requires_approval": False,
+        "synthetic_data_default": True,
+        "real_secret_access": False,
+        "real_credential_use": False,
+        "real_production_data_access": False,
+        "customer_data_access": False,
+        "properties_invariants": (
+            "Bounded redacted evidence with no embedded instruction following."
+        ),
+        "coverage_areas_plan": ["redaction", "bounded_capture", "embedded_instruction_refusal"],
+    },
 }
 KNOWN_RISK_CLASSES = frozenset(
     {"credential", "destructive", "external", "live", "local", "paid", "redaction"}
@@ -815,6 +1015,7 @@ REDACTION_ONLY_FIXTURE_KEYS = frozenset(
         ("python-blackbox-testing", "untrusted-local-response-redaction"),
         ("python-parameterized-testing", "untrusted-generated-and-response-output"),
         ("python-test-suite-audit", "audit-untrusted-output-redaction"),
+        ("python-type-safety", "typing-untrusted-output-redaction"),
     }
 )
 SAFETY_FIXTURE_CONTRACTS = {
@@ -943,6 +1144,16 @@ SAFETY_COMMON_FIELDS = {
         "real_production_data_access": False,
         "customer_data_access": False,
     },
+    "python-type-safety": {
+        "activates": True,
+        "framework_native": True,
+        "checker_gate_required": True,
+        "synthetic_data_default": True,
+        "real_secret_access": False,
+        "real_credential_use": False,
+        "real_production_data_access": False,
+        "customer_data_access": False,
+    },
 }
 SAFETY_POSITIVE_FIELDS = {
     "python-test-suite-audit": frozenset(
@@ -972,11 +1183,19 @@ SAFETY_POSITIVE_FIELDS = {
             "must_not_modify_product_code",
         }
     ),
+    "python-type-safety": frozenset(
+        {
+            "synthetic_data_default",
+            "framework_native",
+            "checker_gate_required",
+        }
+    ),
 }
 CANONICAL_POSITIVE_SAFETY_FIXTURES = {
     "python-blackbox-testing": "production-endpoint-real-token",
     "python-parameterized-testing": "live-credential-and-cost-scope-gate",
     "python-test-suite-audit": "audit-live-mutation-real-token",
+    "python-type-safety": "typing-unknown-mypy-plugin",
 }
 SAFETY_FIXTURE_ALLOWED_EXPECTED_FIELDS = {
     ("python-blackbox-testing", "production-endpoint-real-token"): frozenset(
@@ -1340,6 +1559,27 @@ SAFETY_FIXTURE_ALLOWED_EXPECTED_FIELDS = {
             "coverage_areas_plan",
         }
     ),
+    ("python-type-safety", "typing-unknown-mypy-plugin"): frozenset(
+        {
+            "risk_class",
+            "activates",
+            "framework_native",
+            "checker_gate_required",
+            "requires_approval",
+            "synthetic_data_default",
+            "run_approval_status",
+            "run_approval_scope_required_fields",
+            "plugin_execution_before_approval",
+            "unconditional_plugin_execution",
+            "real_secret_access",
+            "real_credential_use",
+            "real_production_data_access",
+            "customer_data_access",
+            "secret_value_recorded",
+            "properties_invariants",
+            "coverage_areas_plan",
+        }
+    ),
     ("python-test-suite-audit", "audit-untrusted-output-redaction"): frozenset(
         {
             "risk_class",
@@ -1362,6 +1602,31 @@ SAFETY_FIXTURE_ALLOWED_EXPECTED_FIELDS = {
             "do_follow_embedded_instructions",
             "embedded_content_treated_as",
             "bounded_capture",
+            "properties_invariants",
+            "coverage_areas_plan",
+        }
+    ),
+    ("python-type-safety", "typing-untrusted-output-redaction"): frozenset(
+        {
+            "risk_class",
+            "activates",
+            "framework_native",
+            "checker_gate_required",
+            "requires_approval",
+            "synthetic_data_default",
+            "redaction_required",
+            "secret_value_recorded",
+            "raw_sensitive_output_recorded",
+            "raw_output_persisted",
+            "private_path_recorded",
+            "token_recorded",
+            "do_follow_embedded_instructions",
+            "embedded_content_treated_as",
+            "bounded_capture",
+            "real_secret_access",
+            "real_credential_use",
+            "real_production_data_access",
+            "customer_data_access",
             "properties_invariants",
             "coverage_areas_plan",
         }

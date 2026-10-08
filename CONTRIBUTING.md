@@ -27,9 +27,11 @@ dependency declarations change, then review the lockfile diff.
 ### Naming and layout
 
 Use a short, lowercase, kebab-case name that describes the capability, such as
-`python-contract-testing`. The directory under `.agents/skills/` must have the same name and contain a
-`SKILL.md` at its root. Keep `.agents/skills/` as the only canonical skill tree; do not mirror content
-under `skills/`.
+`python-contract-testing`. The directory under `src/` must have the same name and contain a
+`SKILL.md` at its root. Keep `src/` as the only canonical skill tree; do not mirror content
+under `skills/` or commit a copy under `.agents/skills/` (a `.agents/skills/` copy is
+machine-local only, for local agent discovery and testing — refresh it with
+`mkdir -p .agents/skills && cp -r src/<skill> .agents/skills/` and never commit it).
 
 ### Portable frontmatter
 
@@ -135,7 +137,7 @@ npx skills add . --list
 Parse every fixture with the development-only PyYAML dependency:
 
 ```bash
-uv run --group dev python -c 'from pathlib import Path; import yaml; files = sorted(Path(".agents/skills").rglob("evals/cases.yaml")); assert files, "no eval fixtures found"; [yaml.safe_load(path.read_text()) for path in files]'
+uv run --group dev python -c 'from pathlib import Path; import yaml; files = sorted(Path("src").rglob("evals/cases.yaml")); assert files, "no eval fixtures found"; [yaml.safe_load(path.read_text()) for path in files]'
 ```
 
 Run the structural/link test explicitly:
@@ -164,8 +166,10 @@ pinned (`skills-ref==0.1.1`, the current release verified on 2026-09-24) so vali
 reproducible; bump the pin deliberately and record the re-verification:
 
 ```bash
-uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate .agents/skills/python-blackbox-testing
-uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate .agents/skills/python-parameterized-testing
+uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-blackbox-testing
+uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-parameterized-testing
+uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-test-suite-audit
+uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-type-safety
 ```
 
 Run the validator for each changed skill rather than assuming all skills were checked. Do not claim a
