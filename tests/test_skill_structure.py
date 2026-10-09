@@ -14,6 +14,7 @@ SKILLS_ROOT = ROOT / "src"
 EXPECTED_SKILLS = {
     "python-blackbox-testing",
     "python-parameterized-testing",
+    "python-property-based-testing",
     "python-test-suite-audit",
     "python-type-safety",
 }
@@ -29,6 +30,13 @@ EXPECTED_REFERENCE_FILES = {
         {
             "domains-and-properties.md",
             "generation-and-replay.md",
+            "evidence-report.md",
+        }
+    ),
+    "python-property-based-testing": frozenset(
+        {
+            "properties-and-strategies.md",
+            "hypothesis-and-shrinking.md",
             "evidence-report.md",
         }
     ),
@@ -852,6 +860,7 @@ def test_repository_markdown_files_include_repository_contracts_and_skill_docume
     assert any(path.startswith("docs/") for path in files)
     assert "src/python-blackbox-testing/SKILL.md" in files
     assert "src/python-parameterized-testing/SKILL.md" in files
+    assert "src/python-property-based-testing/SKILL.md" in files
     assert "src/python-test-suite-audit/SKILL.md" in files
     assert "src/python-type-safety/SKILL.md" in files
     assert "docs/superpowers/specs/2026-09-24-initial-python-testing-skills-design.md" in files
