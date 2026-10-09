@@ -174,9 +174,9 @@ def test_scanner_flags_session_add_and_qualified_receivers():
         result = _patterns_for("src/shop/service_layer/handlers.py", snippet)
         patterns = [finding["pattern"] for finding in result["findings"]]
         assert "session-outside-uow" in patterns, snippet
-        assert any(
-            expected_evidence in finding["evidence"] for finding in result["findings"]
-        ), snippet
+        assert any(expected_evidence in finding["evidence"] for finding in result["findings"]), (
+            snippet
+        )
 
 
 def test_scanner_does_not_flag_session_inside_uow_or_adapters():
