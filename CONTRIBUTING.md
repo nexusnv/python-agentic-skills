@@ -168,6 +168,7 @@ reproducible; bump the pin deliberately and record the re-verification:
 ```bash
 uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-blackbox-testing
 uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-parameterized-testing
+uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-property-based-testing
 uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-test-suite-audit
 uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-type-safety
 ```

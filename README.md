@@ -20,6 +20,7 @@ to inspect, not proof that a program is correct.
 | --- | --- |
 | `python-blackbox-testing` | Testing a CLI's documented exit codes and output; characterizing a public HTTP or Python API; checking state transitions and observable side effects without coupling tests to private implementation details. |
 | `python-parameterized-testing` | Building a boundary matrix for a parser; combining fixed and generated inputs; testing Unicode and malformed data; replaying a seeded counterexample; or adding a property with an explicit oracle. |
+| `python-property-based-testing` | Proving a quantified invariant with Hypothesis strategies and shrinking; designing oracles, bounding assume/filtering, replaying a shrunken counterexample with seed and settings. |
 | `python-test-suite-audit` | Auditing an existing suite for tautological tests, weak assertions, over-mocking, private coupling, missing error paths, or order-dependent structure; producing a severity scorecard without changing code. |
 | `python-type-safety` | Adding missing annotations boundary-first; gating with mypy or pyright to zero errors; triaging error codes; recording checker divergences without chasing them. |
 
@@ -33,6 +34,9 @@ with the conventions already present in the target repository.
 - `python-parameterized-testing` for domain and property depth on logic: input matrices, boundary
   families, generated witnesses with seeds and replay, and round-trip, invariant, or metamorphic
   properties with explicit oracles.
+- `python-property-based-testing` for quantified property depth on one contract: Hypothesis
+  strategies, composites, assume budgets, shrinking, and seed/replay with an independent oracle.
+  Finite tables stay with parameterized; stateful sequences are deferred.
 - `python-test-suite-audit` for read-only suite health: grade whether existing tests detect
   faults or inflate coverage, with Critical/Major/Minor severities and confirmation by
   execution. Audit first, then use black-box or parameterized remediation without
@@ -65,6 +69,12 @@ Install the parameterized testing skill:
 
 ```bash
 npx skills add nexusnv/python-agentic-skills --skill python-parameterized-testing
+```
+
+Install the property-based testing skill:
+
+```bash
+npx skills add nexusnv/python-agentic-skills --skill python-property-based-testing
 ```
 
 Install the test suite audit skill:

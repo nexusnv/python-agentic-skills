@@ -28,6 +28,12 @@ All notable changes to this project are documented in this file. The format foll
 - Eight eval fixtures (four per skill) covering the lite profile, env
   allowlist, level choice, sandbox fallback, dependent checksums, recurrence
   without goldens, manual minimization, and rate-limit strategy.
+- `python-property-based-testing`, an independently installable Hypothesis-led skill for quantified
+  properties (round-trip, invariant, idempotence, order, differential, metamorphic) with strategy
+  design, assume budgets, settings/deadline/database recording, shrinking, and seed/replay. It ships
+  three references, eval fixtures with a depth-split near-miss against parameterized tables, and a
+  standard-library-only `plan_property_matrix.py` planner. Stateful RuleBasedStateMachine work is
+  explicitly deferred.
 
 ## [0.1.0] - 2026-09-24
 
