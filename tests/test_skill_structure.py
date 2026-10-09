@@ -12,6 +12,7 @@ import pytest
 ROOT = Path(__file__).parents[1]
 SKILLS_ROOT = ROOT / "src"
 EXPECTED_SKILLS = {
+    "python-architecture-review",
     "python-blackbox-testing",
     "python-parameterized-testing",
     "python-property-based-testing",
@@ -19,6 +20,13 @@ EXPECTED_SKILLS = {
     "python-type-safety",
 }
 EXPECTED_REFERENCE_FILES = {
+    "python-architecture-review": frozenset(
+        {
+            "domain-and-boundaries.md",
+            "services-and-events.md",
+            "evidence-report.md",
+        }
+    ),
     "python-blackbox-testing": frozenset(
         {
             "boundaries-and-oracles.md",
@@ -858,6 +866,7 @@ def test_repository_markdown_files_include_repository_contracts_and_skill_docume
         "CHANGELOG.md",
     } <= files
     assert any(path.startswith("docs/") for path in files)
+    assert "src/python-architecture-review/SKILL.md" in files
     assert "src/python-blackbox-testing/SKILL.md" in files
     assert "src/python-parameterized-testing/SKILL.md" in files
     assert "src/python-property-based-testing/SKILL.md" in files
