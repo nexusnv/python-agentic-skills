@@ -133,4 +133,4 @@ Extend existing suites (no new framework): structural tests discover the sixth s
 - [skills.sh CLI reference](https://www.skills.sh/docs/cli)
 - [Cosmic Python — free online edition](https://www.cosmicpython.com/book/preface.html)
 - [Cosmic Python code](https://github.com/cosmicpython/code)
-- [Research report in this repo](docs/research/2026-10-09-cosmic-python-architecture-patterns.md)
+- [Research report in this repo](../../research/2026-10-09-cosmic-python-architecture-patterns.md)
