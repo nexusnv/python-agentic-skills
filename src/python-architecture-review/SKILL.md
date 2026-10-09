@@ -49,8 +49,11 @@ unless the user separately requests product-code work.
   objects, entities, or domain services.
 - Keep the scanner advisory. `scripts/scan_architecture.py` flags static
   import and layer patterns only; every finding is advisory until confirmed
-  by reading code. Cap unconfirmed static patterns at Minor with confirmed
-  set to no.
+  by reading code. The scanner emits severity `advisory`, which maps to
+  report severity Minor with confirmed set to no; promote only after
+  confirmation. It flags `session.commit/query/add` only on a literal
+  `session` receiver (`session`, `self.session`, `db.session`), never a
+  bare `.commit()` on another object.
 - Use the target repository's existing runner, layout, fixtures, and
   assertion style. Do not silently install import-linter, Hypothesis, or
   checkers; propose the install and ask first.
@@ -116,7 +119,8 @@ unless the user separately requests product-code work.
 ## Failure handling
 
 - **Unconfirmed static finding:** keep advisory at Minor with confirmed
-  set to no; promote only after reading code or an independent review.
+  set to no (scanner severity `advisory` maps to report severity Minor);
+  promote only after reading code or an independent review.
 - **Ambiguous direction:** label current versus anticipated as an open
   question; never present an invented roadmap as a pass.
 - **Over-prescription risk:** require gate evidence before Part 2; when

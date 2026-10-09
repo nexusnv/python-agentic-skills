@@ -44,11 +44,17 @@ Entrypoints reach the domain only via commands and events, never by importing `d
 ```bash
 rg -n 'session\.(commit|query|add)' --glob '!*unit_of_work*' --glob '!adapters/*' src/
 rg -n 'send_mail|SMTP|redis\.publish|requests\.' --glob '!adapters/*' --glob '!bootstrap.py' src/
-rg -n 'class \w+\((Base|Model)\)' src/*/domain/
-rg -n 'mock\.patch.*(Repository|UnitOfWork|MessageBus|Notifications)' tests/
+rg -n 'class \w+\((Base|Model|DeclarativeBase)\)' src/*/domain/
+rg -n 'mock\.patch(\.object)?\(.*(Repository|UnitOfWork|MessageBus|Notifications)' tests/
+rg -n 'mocker\.patch(\.object)?\(.*(Repository|UnitOfWork|MessageBus|Notifications)' tests/
+rg -n '(^|[^\w.])patch(\.object)?\(.*(Repository|UnitOfWork|MessageBus|Notifications)' tests/
 ```
 
 Each hit is advisory; confirm by reading code, then grade at most Minor until confirmed.
+Scanner severity `advisory` maps to report severity Minor with confirmed set to no.
+The scanner matches `session.commit/query/add` only on a literal `session` receiver
+(`session`, `self.session`, `db.session`) and matches `patch` in all three mock
+spellings including the `.object(...)` form, including calls split across lines.
 
 ## Bootstrap recipe
 
