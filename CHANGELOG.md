@@ -34,6 +34,12 @@ All notable changes to this project are documented in this file. The format foll
   three references, eval fixtures with a depth-split near-miss against parameterized tables, and a
   standard-library-only `plan_property_matrix.py` planner. Stateful RuleBasedStateMachine work is
   explicitly deferred.
+- `python-architecture-review`, an independently installable read-only skill for Cosmic Python
+  architecture reviews (seams, segmentation, inheritance, boundaries, scalability,
+  maintainability) with complexity-gated proposals, forward-looking triggers, folder hierarchy,
+  import-linter and scanner guards, and test-pyramid placement. It ships three references, eval
+  fixtures with CRUD carve-out and forward-looking cases, and a standard-library-only
+  `scan_architecture.py` scanner. Refactoring stays out of scope.
 
 ## [0.1.0] - 2026-09-24
 

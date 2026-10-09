@@ -23,6 +23,7 @@ to inspect, not proof that a program is correct.
 | `python-property-based-testing` | Proving a quantified invariant with Hypothesis strategies and shrinking; designing oracles, bounding assume/filtering, replaying a shrunken counterexample with seed and settings. |
 | `python-test-suite-audit` | Auditing an existing suite for tautological tests, weak assertions, over-mocking, private coupling, missing error paths, or order-dependent structure; producing a severity scorecard without changing code. |
 | `python-type-safety` | Adding missing annotations boundary-first; gating with mypy or pyright to zero errors; triaging error codes; recording checker divergences without chasing them. |
+| `python-architecture-review` | Reviewing seams, segmentation, inheritance, boundaries, scalability, and maintainability through Cosmic Python; proposing a gated target architecture with guards, folder hierarchy, and tests that make violation hard. |
 
 Each skill is independently installable. None requires another, and all are designed to work
 with the conventions already present in the target repository.
@@ -44,6 +45,7 @@ with the conventions already present in the target repository.
 - `python-type-safety` for annotation health: boundary-first annotation coverage, strict
   checker gates with mypy or pyright, error-code triage, and report-only cross-checks.
   Type first, then use black-box or parameterized skills to prove runtime behavior.
+- `python-architecture-review` for architecture proposals: seam and dependency mapping, complexity-gated Cosmic Python targets, forward-looking scalability, and enforceable guards. Read-only by default with chat findings and an optional proposal file; it never refactors code.
 - Combine them on libraries with a CLI or a broad public surface: black-box for the acceptance
   matrix, parameterized for the input-domain depth, audit for suite health. Keep the skills
   independent; each owns its workflow and its own evidence report.
@@ -87,6 +89,12 @@ Install the type safety skill:
 
 ```bash
 npx skills add nexusnv/python-agentic-skills --skill python-type-safety
+```
+
+Install the architecture review skill:
+
+```bash
+npx skills add nexusnv/python-agentic-skills --skill python-architecture-review
 ```
 
 The install commands above are **project-local by default** because they omit `--global`; keep the

@@ -171,6 +171,7 @@ uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-par
 uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-property-based-testing
 uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-test-suite-audit
 uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-type-safety
+uvx --python 3.11 --from 'skills-ref==0.1.1' agentskills validate src/python-architecture-review
 ```
 
 Run the validator for each changed skill rather than assuming all skills were checked. Do not claim a
