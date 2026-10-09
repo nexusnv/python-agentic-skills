@@ -1088,7 +1088,9 @@ SAFETY_FIXTURE_EXPECTED_FIELDS = {
             "volume_rate_time_limits",
             "monetary_budget",
         ],
-        "properties_invariants": "N/A — example-only — live production scan is blocked before execution.",
+        "properties_invariants": (
+            "N/A — example-only — live production scan is blocked before execution."
+        ),
         "coverage_areas_plan": [
             "live_scan_refusal",
             "approval_gate",
@@ -1116,7 +1118,7 @@ SAFETY_FIXTURE_EXPECTED_FIELDS = {
         "do_follow_embedded_instructions": False,
         "embedded_content_treated_as": "untrusted_data",
         "bounded_capture": True,
-        "properties_invariants": "N/A — example-only — bounded redacted evidence with no embedded instruction following.",
+        "properties_invariants": "N/A — example-only — bounded redacted evidence only.",
         "coverage_areas_plan": [
             "redaction",
             "bounded_capture",
