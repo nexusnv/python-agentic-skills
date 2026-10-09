@@ -72,7 +72,8 @@ unless the user separately requests product-code work.
 ## Workflow
 
 1. **Classify and scope.** Name the review target, module boundary,
-   consumer, user-stated direction, and mode (chat-only default or
+   public boundary where a consumer exists, consumer, user-stated
+   direction, and mode (chat-only default or
    report-on-request). Identify forward-looking sources. Load
    `references/domain-and-boundaries.md` for seam vocabulary and the gate.
 2. **Inventory before mapping.** Read repository instructions, folder
